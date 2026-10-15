@@ -1,0 +1,2210 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TERA POS - نظام المبيعات والمحاسبة وإدارة المناديب</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+    body { font-family: 'Cairo', sans-serif; background-color: #eef1f5; user-select: none; }
+    .mpos-card {
+      background: #ffffff;
+      border: 1px solid #d8dee6;
+      border-radius: 10px;
+      transition: all 0.18s ease;
+    }
+    .mpos-card:active { transform: scale(0.97); background: #f1f8f5; }
+    .mpos-header { background: linear-gradient(135deg, #1f2937 0%, #0f5132 100%); }
+    .pink-check { accent-color: #e91e63; width: 18px; height: 18px; }
+    @media print {
+      .no-print { display: none !important; }
+      #printArea { display: block !important; position: static !important; width: 100% !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- الشريط العلوي (TERA POS Header) -->
+  <header class="mpos-header text-white px-4 py-3 shadow-lg sticky top-0 z-40 no-print">
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleDrawer(true)" class="text-white hover:text-amber-300 text-xl p-1">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <button id="backHomeBtn" onclick="navigate('HOME')" class="hidden bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg text-sm">
+          <i class="fa-solid fa-chevron-right"></i> الرئيسية
+        </button>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-lg tracking-wide text-amber-400">TERA POS</span>
+            <span id="headerScreenTitle" class="text-sm font-semibold text-gray-200">| الشاشة الرئيسية</span>
+          </div>
+          <div class="text-[11px] text-emerald-200 flex items-center gap-2">
+            <span id="currentUserBadge"><i class="fa-solid fa-user-shield"></i> المدير العام (Master)</span>
+            <span>•</span>
+            <span id="currentWarehouseBadge">المخزن الرئيسي للشركة</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- مبدل الحساب السريع (المدير / المناديب) من NO HOW -->
+        <select id="activeAccountSelect" onchange="switchActiveUser(this.value)" class="bg-black/30 text-white border border-white/20 rounded-lg px-2 py-1 text-xs font-bold">
+          <option value="ADMIN">👑 حساب المدير العام (تحكم كامل)</option>
+        </select>
+
+        <!-- جرس التنبيهات (تحويلات معلقة + نواقص + صلاحيات) -->
+        <button onclick="openAlertsModal()" class="relative bg-amber-500/20 border border-amber-400/40 p-2 rounded-lg text-amber-300 hover:bg-amber-500/30">
+          <i class="fa-solid fa-envelope-open-text"></i>
+          <span id="alertCounterBadge" class="absolute -top-1.5 -left-1.5 bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- القائمة الجانبية (Drawer: المعالجات المتقدمة + إعدادات النظام + النسخ الاحتياطي) -->
+  <div id="sideDrawerOverlay" onclick="toggleDrawer(false)" class="fixed inset-0 bg-black/60 z-50 hidden no-print">
+    <div onclick="event.stopPropagation()" class="bg-white w-80 max-w-[85vw] h-full overflow-y-auto shadow-2xl flex flex-col">
+      <div class="mpos-header text-white p-4">
+        <div class="flex justify-between items-center">
+          <h2 class="font-extrabold text-lg text-amber-400">TERA POS - Micro & Field ERP</h2>
+          <button onclick="toggleDrawer(false)" class="text-white/80 text-lg">✕</button>
+        </div>
+        <p id="drawerUserSubtitle" class="text-xs text-gray-300 mt-1">admin | التحكم الكامل والربط السحابي</p>
+      </div>
+
+      <div class="p-3 space-y-1 text-sm flex-1">
+        <div class="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded">معالجات متقدمة (رقابة وتعديلات)</div>
+        <button onclick="openAdvProcessor('EDIT_SALE')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-pen-to-square text-emerald-700 w-5"></i> تعديل فاتورة مبيعات</button>
+        <button onclick="openAdvProcessor('EDIT_PURCHASE')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-file-pen text-blue-700 w-5"></i> تعديل فاتورة مشتريات</button>
+        <button onclick="openAdvProcessor('CANCEL_INVOICE')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-ban text-red-600 w-5"></i> إلغاء فاتورة مبيعات / مشتريات</button>
+        <button onclick="openAdvProcessor('CANCEL_CASH_EXP')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-money-bill-transfer text-red-600 w-5"></i> إلغاء مبلغ - صندوق / مصروفات</button>
+        <button onclick="openAdvProcessor('CANCEL_VOUCHER')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-file-circle-xmark text-red-600 w-5"></i> إلغاء سند - قبض / صرف</button>
+        <button onclick="openAdvProcessor('RETURN_SALE')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-rotate-left text-amber-600 w-5"></i> إرجاع فاتورة مبيعات - منتج</button>
+        <button onclick="openAdvProcessor('RETURN_PURCHASE')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-rotate-right text-amber-700 w-5"></i> إرجاع فاتورة مشتريات - منتج</button>
+        <button onclick="openAdvProcessor('PARTY_TRANSFER')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-right-left text-indigo-600 w-5"></i> التحويل بين العملاء والموردين</button>
+        <button onclick="openAdvProcessor('DAMAGED_STOCK')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-triangle-exclamation text-orange-600 w-5"></i> معالجة المنتجات التالفة</button>
+        <button onclick="openAdvProcessor('PRICE_CHECKER')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-barcode text-teal-700 w-5"></i> شاشة عرض الأسعار بالباركود</button>
+
+        <div class="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded mt-3">إدارة المناديب والصلاحيات (NO HOW)</div>
+        <button onclick="toggleDrawer(false); navigate('REPS_ADMIN')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-users-gear text-purple-700 w-5"></i> حسابات المناديب والصلاحيات</button>
+        <button onclick="toggleDrawer(false); navigate('TRANSFERS')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-truck-ramp-box text-emerald-700 w-5"></i> تحويلات البضائع والأموال</button>
+
+        <div class="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded mt-3">إعدادات النظام والنسخ الاحتياطي</div>
+        <button onclick="toggleDrawer(false); navigate('SETTINGS_GENERAL')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-screwdriver-wrench text-gray-700 w-5"></i> الإعدادات العامة والبيع</button>
+        <button onclick="toggleDrawer(false); navigate('SETTINGS_TAX')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-percent text-gray-700 w-5"></i> الضرائب (TAX 1 - TAX 5)</button>
+        <button onclick="toggleDrawer(false); navigate('SETTINGS_PRINTER')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-solid fa-print text-gray-700 w-5"></i> إعدادات الطابعة والفاتورة</button>
+        <button onclick="toggleDrawer(false); navigate('SETTINGS_BACKUP')" class="w-full text-right px-3 py-2 hover:bg-gray-100 rounded flex items-center gap-3"><i class="fa-brands fa-google-drive text-blue-600 w-5"></i> النسخ الاحتياطي والربط السحابي</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- حاوية الشاشات الرئيسية -->
+  <main id="mainContainer" class="max-w-6xl w-full mx-auto p-3 flex-1 no-print"></main>
+
+  <!-- منطقة الطباعة وتصدير تقارير MPOSPDF -->
+  <div id="printArea" class="hidden bg-white p-6 max-w-4xl mx-auto"></div>
+
+  <!-- نافذة عامة للمودال (شاشات البيع 1-4 / المعالجات المتقدمة / التقارير المنبثقة) -->
+  <div id="globalModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-3 no-print">
+    <div id="globalModalContent" class="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-5 shadow-2xl"></div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // 1. قاعدة البيانات الموحدة والمحرك المحاسبي الصارم (TERA POS SSOT DB)
+    // ============================================================================
+    const STORAGE_KEY = 'TERA_POS_ERP_V1';
+
+    const defaultState = {
+      currentScreen: 'HOME',
+      activeUserId: 'ADMIN', // 'ADMIN' or Rep Account ID
+      activePosSlot: 1, // 1, 2, 3, 4, or 'QUOTE'
+      posSlots: {
+        1: { clientId: 52, items: [], discount: 0, payMethod: 'نقدا', paidAmount: 0, taxId: 'NONE' },
+        2: { clientId: 52, items: [], discount: 0, payMethod: 'نقدا', paidAmount: 0, taxId: 'NONE' },
+        3: { clientId: 52, items: [], discount: 0, payMethod: 'نقدا', paidAmount: 0, taxId: 'NONE' },
+        4: { clientId: 52, items: [], discount: 0, payMethod: 'نقدا', paidAmount: 0, taxId: 'NONE' },
+        QUOTE: { clientId: 52, items: [], discount: 0, payMethod: 'عرض سعر', paidAmount: 0, taxId: 'NONE' }
+      },
+      settings: {
+        storeName: 'TERA POS - أستر فارما للأدوية البيطرية',
+        country: 'مصر',
+        currency: 'ج.م',
+        subCurrency: 'قرش',
+        decimals: 2,
+        address: '6 أكتوبر - الجيزة',
+        phone: '01004607588',
+        taxNumber: '300-459-821',
+        crNumber: '1029485',
+        warnLowStock: true,
+        blockZeroStock: true,
+        allowCreditSale: true,
+        preventSellBelowCost: true,
+        showCostInPos: true,
+        showPrevDebtOnInvoice: true,
+        showQrOnInvoice: true,
+        paperSize: '80mm',
+        priceIncludesTax: false,
+        calcTaxAfterDiscount: true,
+        serverIp: '192.168.1.100:8080',
+        driveAccount: 'dr.abdallah.adel.vet.gemini@gmail.com',
+        autoBackupHours: 6,
+        taxes: [
+          { id: 'TAX1', name: 'ضريبة القيمة المضافة', code: 'TAX1', rate: 14 },
+          { id: 'TAX2', name: 'ضريبة 2', code: 'TAX2', rate: 5 },
+          { id: 'TAX3', name: 'ضريبة 3', code: 'TAX3', rate: 5 },
+          { id: 'TAX4', name: 'ضريبة 4', code: 'TAX4', rate: 5 },
+          { id: 'TAX5', name: 'ضريبة 5', code: 'TAX5', rate: 0 }
+        ]
+      },
+      warehouses: [
+        { id: 1, name: 'المخزن الرئيسي للشركة', type: 'MAIN', repId: null },
+        { id: 2, name: 'مخزن سيارة: د. محمد صلاح', type: 'VAN', repId: 1 },
+        { id: 3, name: 'مخزن سيارة: د. أحمد حسن', type: 'VAN', repId: 2 }
+      ],
+      reps: [
+        {
+          id: 1,
+          fullName: 'د. محمد صلاح',
+          username: 'salah',
+          password: '123',
+          phone: '01011223344',
+          region: 'الدقهلية ودمياط',
+          status: 'ACTIVE',
+          warehouseId: 2,
+          cashCustody: 4500.00,
+          monthlyTarget: 150000.00,
+          commissionRate: 2.5,
+          permissions: {
+            canSale: true,
+            canPurchase: false,
+            canApplyDiscount: true,
+            canChangePrice: false,
+            canCreditSale: true,
+            canViewCostAndProfit: false,
+            canTransferStock: true,
+            canAccessAdvProcessors: false,
+            allowedReportGroups: ['SALES', 'CLIENTS', 'STOCK', 'REPS']
+          }
+        },
+        {
+          id: 2,
+          fullName: 'د. أحمد حسن',
+          username: 'ahmed',
+          password: '123',
+          phone: '01122334455',
+          region: 'الشرقية والغربية',
+          status: 'ACTIVE',
+          warehouseId: 3,
+          cashCustody: 1200.00,
+          monthlyTarget: 120000.00,
+          commissionRate: 2.0,
+          permissions: {
+            canSale: true,
+            canPurchase: false,
+            canApplyDiscount: false,
+            canChangePrice: false,
+            canCreditSale: true,
+            canViewCostAndProfit: false,
+            canTransferStock: true,
+            canAccessAdvProcessors: false,
+            allowedReportGroups: ['SALES', 'CLIENTS']
+          }
+        }
+      ],
+      categories: ['مضادات حيوية', 'مضادات طفيليات', 'لقاحات وتحصينات', 'فيتامينات وأملاح', 'مطهرات'],
+      products: [
+        {
+          id: 101,
+          barcode: '6221001',
+          name: 'أموكسيسيلين 20% بودر (1 كجم)',
+          scientificName: 'Amoxicillin 20%',
+          category: 'مضادات حيوية',
+          unit: 'عبوة',
+          costPrice: 280.00,
+          sellPrice: 360.00,
+          wholesalePrice: 330.00,
+          minStock: 10,
+          expiryDate: '2027-11-01',
+          stockByWarehouse: { 1: 80, 2: 25, 3: 15 }
+        },
+        {
+          id: 102,
+          barcode: '6221002',
+          name: 'إنروفلوكساسين 20% سائل (1 لتر)',
+          scientificName: 'Enrofloxacin 20%',
+          category: 'مضادات حيوية',
+          unit: 'عبوة',
+          costPrice: 310.00,
+          sellPrice: 450.00,
+          wholesalePrice: 420.00,
+          minStock: 15,
+          expiryDate: '2027-08-15',
+          stockByWarehouse: { 1: 100, 2: 30, 3: 20 }
+        },
+        {
+          id: 103,
+          barcode: '6221003',
+          name: 'إيفرمكتين سوبر 1% حقن (500 مل)',
+          scientificName: 'Ivermectin + Clorsulon',
+          category: 'مضادات طفيليات',
+          unit: 'فيال',
+          costPrice: 380.00,
+          sellPrice: 490.00,
+          wholesalePrice: 460.00,
+          minStock: 10,
+          expiryDate: '2026-12-20',
+          stockByWarehouse: { 1: 50, 2: 12, 3: 8 }
+        },
+        {
+          id: 104,
+          barcode: '6221004',
+          name: 'لقاح نيوكاسل لاسوتا (1000 جرعة)',
+          scientificName: 'NDV LaSota',
+          category: 'لقاحات وتحصينات',
+          unit: 'أمبول',
+          costPrice: 85.00,
+          sellPrice: 125.00,
+          wholesalePrice: 110.00,
+          minStock: 30,
+          expiryDate: '2026-11-10',
+          stockByWarehouse: { 1: 150, 2: 40, 3: 30 }
+        }
+      ],
+      // العملاء مطابقين لبيانات وأرصدة صور MicroPOS المرفقة
+      clients: [
+        { id: 51, code: 'C-51', name: 'د. أحمد صالح', phone: '01004607588', city: 'الجيزة', address: '6 أكتوبر', taxNo: '', crNo: '', openingBalance: 0.00, balance: 6200.00, repId: 1 },
+        { id: 52, code: 'C-52', name: 'حازم إمام', phone: '01012345671', city: 'المنصورة', address: 'شارع الجمهورية', taxNo: '', crNo: '', openingBalance: 10000.00, balance: 63276.00, repId: 1 },
+        { id: 53, code: 'C-53', name: 'مؤسسة الإيمان البيطرية', phone: '01012345672', city: 'دمياط', address: 'فارسكور', taxNo: '', crNo: '', openingBalance: 0.00, balance: 17232.00, repId: 1 },
+        { id: 54, code: 'C-54', name: 'د. علي إسماعيل', phone: '01012345673', city: 'بنها', address: 'وسط البلد', taxNo: '', crNo: '', openingBalance: 0.00, balance: 13200.00, repId: 2 },
+        { id: 55, code: 'C-55', name: 'م. محمد يحيى', phone: '01012345674', city: 'ميت غمر', address: 'طريق المنصورة', taxNo: '', crNo: '', openingBalance: 0.00, balance: 2217.00, repId: 1 },
+        { id: 63, code: 'C-63', name: 'د. عبد الفتاح شاهين', phone: '01012345675', city: 'الزقازيق', address: 'القومية', taxNo: '', crNo: '', openingBalance: 0.00, balance: 800.00, repId: 2 },
+        { id: 64, code: 'C-64', name: 'أ. محمد عرفة', phone: '01012345676', city: 'طنطا', address: 'سعيد', taxNo: '', crNo: '', openingBalance: 0.00, balance: 2850.00, repId: 2 }
+      ],
+      // الموردين مطابقين لصور MicroPOS المرفقة
+      suppliers: [
+        { id: 3, name: 'مخزن الشركة - بدر', phone: '022881122', address: 'مدينة بدر الصناعية', openingBalance: 0.00, balance: 0.00 },
+        { id: 4, name: 'مخزن الشركة - أكتوبر', phone: '023882211', address: '6 أكتوبر الصناعية', openingBalance: 0.00, balance: 0.00 },
+        { id: 5, name: 'شركة محمد يحيى للأدوية', phone: '0109988771', address: 'القاهرة', openingBalance: 0.00, balance: 14500.00 },
+        { id: 6, name: 'مؤسسة علي إسماعيل للتوريدات', phone: '0123344556', address: 'الإسكندرية', openingBalance: 0.00, balance: 0.00 },
+        { id: 7, name: 'جمال البدوي للأدوية البيطرية', phone: '0114455667', address: 'الجيزة', openingBalance: 0.00, balance: 8200.00 }
+      ],
+      invoices: [
+        {
+          id: 1001,
+          number: 'INV-1001',
+          type: 'SALE', // SALE, PURCHASE, SALE_RETURN, PURCHASE_RETURN, QUOTE
+          date: '2026-10-14',
+          partyId: 51,
+          partyName: 'د. أحمد صالح',
+          warehouseId: 1,
+          repId: 1,
+          payMethod: 'آجل', // نقدا, آجل, بطاقة, شيك
+          subtotal: 6200.00,
+          discount: 0.00,
+          taxRate: 0,
+          taxAmount: 0.00,
+          grandTotal: 6200.00,
+          paidAmount: 0.00,
+          remainingAmount: 6200.00,
+          totalCost: 4550.00,
+          status: 'ACTIVE', // ACTIVE, CANCELLED
+          items: [
+            { productId: 102, name: 'إنروفلوكساسين 20% سائل (1 لتر)', qty: 10, bonus: 0, price: 450.00, cost: 310.00, total: 4500.00 },
+            { productId: 104, name: 'لقاح نيوكاسل لاسوتا (1000 جرعة)', qty: 10, bonus: 0, price: 170.00, cost: 85.00, total: 1700.00 }
+          ]
+        }
+      ],
+      cashTransactions: [
+        { id: 501, date: '2026-10-15', type: 'IN', payMethod: 'نقدا', amount: 25000.00, category: 'رصيد افتتاحي للصندوق', partyName: 'الإدارة', notes: 'إيداع بداية الفترة', repId: null, status: 'ACTIVE' }
+      ],
+      expenses: [
+        { id: 701, date: '2026-10-15', account: 'مصروفات تشغيل وانتقالات', statement: 'تموين وقود سيارات المناديب', amount: 650.00, payMethod: 'نقدا', repId: null, status: 'ACTIVE' }
+      ],
+      damagedStockLogs: [],
+      transferRequests: [
+        {
+          id: 901,
+          date: '2026-10-15',
+          transferType: 'MONEY', // 'STOCK' or 'MONEY'
+          senderName: 'د. محمد صلاح',
+          senderRepId: 1,
+          recipientName: 'الخزينة الرئيسية للإدارة',
+          recipientRepId: null,
+          productId: null,
+          productName: '',
+          fromWarehouseId: null,
+          toWarehouseId: null,
+          qty: 0,
+          amount: 1500.00,
+          status: 'PENDING', // PENDING, APPROVED, REJECTED
+          notes: 'توريد نقدية محصلة من خط الدقهلية'
+        }
+      ]
+    };
+
+    let state = loadState();
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return JSON.parse(JSON.stringify(defaultState));
+        return Object.assign(JSON.parse(JSON.stringify(defaultState)), JSON.parse(raw));
+      } catch (e) {
+        return JSON.parse(JSON.stringify(defaultState));
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      updateHeaderBadges();
+    }
+
+    // دالة تقريب محاسبي صارم لمنزلتين عشريتين (منع أخطاء الكسور العائمة)
+    function R2(val) {
+      return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
+    }
+
+    function fmt(val) {
+      return R2(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function todayStr() {
+      return '2026-10-15';
+    }
+
+    function getCurrentRep() {
+      if (state.activeUserId === 'ADMIN') return null;
+      return state.reps.find(r => String(r.id) === String(state.activeUserId)) || null;
+    }
+
+    function getActiveWarehouseId() {
+      const rep = getCurrentRep();
+      return rep ? rep.warehouseId : 1;
+    }
+
+    function getAvailableStock(product, warehouseId) {
+      const whId = warehouseId || getActiveWarehouseId();
+      return (product.stockByWarehouse && product.stockByWarehouse[whId]) ? Number(product.stockByWarehouse[whId]) : 0;
+    }
+
+    function adjustStock(productId, warehouseId, deltaQty) {
+      const prod = state.products.find(p => Number(p.id) === Number(productId));
+      if (!prod) return false;
+      if (!prod.stockByWarehouse) prod.stockByWarehouse = {};
+      const current = Number(prod.stockByWarehouse[warehouseId] || 0);
+      const next = current + Number(deltaQty);
+      if (next < 0 && state.settings.blockZeroStock) return false;
+      prod.stockByWarehouse[warehouseId] = Math.max(0, next);
+      return true;
+    }
+
+    // حساب أرصدة الصندوق الرئيسية بدقة (نقدا / بطاقة / شيك)
+    function computeSafeBalances(startDate, endDate) {
+      let cash = 0, card = 0, check = 0;
+      let periodIn = 0, periodOut = 0;
+
+      state.cashTransactions.filter(t => t.status === 'ACTIVE').forEach(t => {
+        const sign = t.type === 'IN' ? 1 : -1;
+        const amt = R2(t.amount) * sign;
+        if (t.payMethod === 'بطاقة') card = R2(card + amt);
+        else if (t.payMethod === 'شيك') check = R2(check + amt);
+        else cash = R2(cash + amt);
+
+        if ((!startDate || t.date >= startDate) && (!endDate || t.date <= endDate)) {
+          if (t.type === 'IN') periodIn = R2(periodIn + t.amount);
+          else periodOut = R2(periodOut + t.amount);
+        }
+      });
+
+      state.expenses.filter(e => e.status === 'ACTIVE').forEach(e => {
+        const amt = R2(e.amount);
+        if (e.payMethod === 'بطاقة') card = R2(card - amt);
+        else if (e.payMethod === 'شيك') check = R2(check - amt);
+        else cash = R2(cash - amt);
+
+        if ((!startDate || e.date >= startDate) && (!endDate || e.date <= endDate)) {
+          periodOut = R2(periodOut + amt);
+        }
+      });
+
+      return {
+        cash,
+        card,
+        check,
+        totalSafe: R2(cash + card + check),
+        periodNet: R2(periodIn - periodOut)
+      };
+    }
+
+    // ============================================================================
+    // 2. إدارة الحسابات والتنقل والشريط العلوي
+    // ============================================================================
+    function populateUserSelector() {
+      const sel = document.getElementById('activeAccountSelect');
+      const currentVal = state.activeUserId;
+      sel.innerHTML = `<option value="ADMIN">👑 المدير العام (Master Admin)</option>` +
+        state.reps.map(r => `<option value="${r.id}">🚗 مندوب: ${r.fullName} (${r.region})</option>`).join('');
+      sel.value = currentVal;
+    }
+
+    function switchActiveUser(val) {
+      const rep = state.reps.find(r => String(r.id) === String(val));
+      if (rep && rep.status !== 'ACTIVE') {
+        alert('هذا الحساب موقوف من قِبل الإدارة! لا يمكن تسجيل الدخول به.');
+        document.getElementById('activeAccountSelect').value = state.activeUserId;
+        return;
+      }
+      state.activeUserId = val;
+      saveState();
+      navigate('HOME');
+    }
+
+    function updateHeaderBadges() {
+      populateUserSelector();
+      const rep = getCurrentRep();
+      document.getElementById('currentUserBadge').innerHTML = rep
+        ? `<i class="fa-solid fa-user-tie"></i> ${rep.fullName} (عهدة النقدية: ${fmt(rep.cashCustody)}${state.settings.currency})`
+        : `<i class="fa-solid fa-user-shield"></i> المدير العام (تحكم كامل بكل الفروع والمناديب)`;
+
+      const wh = state.warehouses.find(w => w.id === getActiveWarehouseId());
+      document.getElementById('currentWarehouseBadge').innerText = wh ? wh.name : 'المخزن الرئيسي';
+
+      // حساب التنبيهات (تحويلات معلقة + أصناف وصلت للحد الأدنى)
+      const pendingTransfers = state.transferRequests.filter(t => t.status === 'PENDING').length;
+      const lowStockCount = state.products.filter(p => getAvailableStock(p, getActiveWarehouseId()) <= p.minStock).length;
+      document.getElementById('alertCounterBadge').innerText = pendingTransfers + lowStockCount;
+    }
+
+    function toggleDrawer(show) {
+      const el = document.getElementById('sideDrawerOverlay');
+      el.classList.toggle('hidden', !show);
+    }
+
+    function openModal(htmlContent) {
+      document.getElementById('globalModalContent').innerHTML = htmlContent;
+      document.getElementById('globalModal').classList.replace('hidden', 'flex');
+    }
+
+    function closeModal() {
+      document.getElementById('globalModal').classList.replace('flex', 'hidden');
+    }
+
+    function navigate(screen) {
+      const rep = getCurrentRep();
+      // التحقق من صلاحيات المندوب قبل فتح الشاشة
+      if (rep) {
+        if (screen === 'PURCHASES' && !rep.permissions.canPurchase) {
+          alert('عفواً، صلاحية المشتريات محجوبة عن حسابك من قِبل المدير.');
+          return;
+        }
+        if (screen === 'REPS_ADMIN') {
+          alert('هذه الشاشة مخصصة للمدير العام فقط لإدارة حسابات وصلاحيات المناديب.');
+          return;
+        }
+      }
+
+      state.currentScreen = screen;
+      saveState();
+
+      const titles = {
+        HOME: 'الشاشة الرئيسية',
+        SALES: 'المبيعات ونقطة البيع (شاشات متعددة 1-4)',
+        PURCHASES: 'فاتورة المشتريات والتوريد المخزني',
+        CLIENTS: 'إدارة العملاء وذمم العملاء',
+        SUPPLIERS: 'إدارة الموردين وحساباتهم',
+        SAFE: 'الصندوق وحركة النقدية',
+        EXPENSES: 'المصروفات اليومية',
+        INVENTORY: 'المخزون والأصناف والتسعير',
+        INQUIRIES: 'مركز الاستعلامات والتقارير الشامل',
+        REPS_ADMIN: 'إدارة حسابات المناديب والصلاحيات (NO HOW)',
+        TRANSFERS: 'تحويلات البضائع والأموال المحصلة',
+        SETTINGS_GENERAL: 'إعدادات النظام والبيع والمخزون',
+        SETTINGS_TAX: 'إعدادات الضرائب (TAX 1 - TAX 5)',
+        SETTINGS_PRINTER: 'إعدادات الطابعة الحرارية وفاتورة A4',
+        SETTINGS_BACKUP: 'النسخ الاحتياطي (Google Drive) والربط مع السيرفر'
+      };
+
+      document.getElementById('headerScreenTitle').innerText = '| ' + (titles[screen] || 'الرئيسية');
+      document.getElementById('backHomeBtn').classList.toggle('hidden', screen === 'HOME');
+
+      const container = document.getElementById('mainContainer');
+      switch (screen) {
+        case 'HOME': renderHomeScreen(container); break;
+        case 'SALES': renderSalesScreen(container); break;
+        case 'PURCHASES': renderPurchasesScreen(container); break;
+        case 'CLIENTS': renderClientsScreen(container); break;
+        case 'SUPPLIERS': renderSuppliersScreen(container); break;
+        case 'SAFE': renderSafeScreen(container); break;
+        case 'EXPENSES': renderExpensesScreen(container); break;
+        case 'INVENTORY': renderInventoryScreen(container); break;
+        case 'INQUIRIES': renderInquiriesScreen(container); break;
+        case 'REPS_ADMIN': renderRepsAdminScreen(container); break;
+        case 'TRANSFERS': renderTransfersScreen(container); break;
+        case 'SETTINGS_GENERAL': renderSettingsGeneral(container); break;
+        case 'SETTINGS_TAX': renderSettingsTax(container); break;
+        case 'SETTINGS_PRINTER': renderSettingsPrinter(container); break;
+        case 'SETTINGS_BACKUP': renderSettingsBackup(container); break;
+        default: renderHomeScreen(container);
+      }
+    }
+
+    // ============================================================================
+    // 3. الشاشة الرئيسية (مطابقة لتصميم MicroPOS + توسعة المناديب والتحويلات)
+    // ============================================================================
+    function renderHomeScreen(container) {
+      const rep = getCurrentRep();
+      const safe = computeSafeBalances();
+
+      const cards = [
+        { id: 'SALES', title: 'المبيعات', sub: '4 شاشات بيع + عروض أسعار', icon: 'fa-cart-shopping', color: 'text-emerald-700', bg: 'bg-emerald-50' },
+        { id: 'PURCHASES', title: 'المشتريات', sub: 'توريد فواتير وبونص', icon: 'fa-dolly', color: 'text-blue-700', bg: 'bg-blue-50' },
+        { id: 'CLIENTS', title: 'العملاء', sub: 'الذمم وكشوف الحساب', icon: 'fa-users', color: 'text-indigo-700', bg: 'bg-indigo-50' },
+        { id: 'SUPPLIERS', title: 'الموردين', sub: 'الأرصدة والفواتير الآجلة', icon: 'fa-truck-field', color: 'text-cyan-700', bg: 'bg-cyan-50' },
+        { id: 'SAFE', title: 'الصندوق', sub: `الرصيد: ${fmt(safe.totalSafe)}${state.settings.currency}`, icon: 'fa-vault', color: 'text-amber-700', bg: 'bg-amber-50' },
+        { id: 'EXPENSES', title: 'المصروفات', sub: 'نقداً / بطاقة / شيك', icon: 'fa-money-bill-wave', color: 'text-rose-700', bg: 'bg-rose-50' },
+        { id: 'INVENTORY', title: 'المخزون', sub: 'المنتجات والتسعير والإكسل', icon: 'fa-boxes-stacked', color: 'text-orange-700', bg: 'bg-orange-50' },
+        { id: 'INQUIRIES', title: 'الاستعلامات', sub: 'حركة المتجر، الزكاة، الضرائب', icon: 'fa-chart-pie', color: 'text-teal-700', bg: 'bg-teal-50' },
+        { id: 'TRANSFERS', title: 'تحويلات البضائع والأموال', sub: 'بين الإدارة والمناديب بدون مضاعفة', icon: 'fa-right-left', color: 'text-purple-700', bg: 'bg-purple-50' },
+        { id: 'REPS_ADMIN', title: 'إدارة المناديب والصلاحيات', sub: 'حسابات المناديب والرقابة (NO HOW)', icon: 'fa-user-lock', color: 'text-slate-800', bg: 'bg-slate-200' }
+      ];
+
+      container.innerHTML = `
+        <!-- شريط ملخص سريع -->
+        <div class="bg-white rounded-xl p-3 mb-3 shadow-sm border flex flex-wrap justify-between items-center gap-2 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="bg-emerald-100 text-emerald-900 font-bold px-2.5 py-1 rounded-lg">
+              ${rep ? `وضع المندوب الميداني: ${rep.fullName}` : 'وضع المدير العام (Master Control)'}
+            </span>
+            <span class="text-gray-500">تاريخ النظام: <strong>${todayStr()}</strong></span>
+          </div>
+          <div class="flex flex-wrap gap-3 font-bold">
+            <span class="text-emerald-700">رصيد الصندوق: ${fmt(safe.totalSafe)} ${state.settings.currency}</span>
+            <span class="text-red-600">ذمم العملاء: ${fmt(state.clients.reduce((s, c) => s + Math.max(0, c.balance), 0))} ${state.settings.currency}</span>
+            <button onclick="openAdvProcessor('PRICE_CHECKER')" class="bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded hover:bg-amber-200">
+              <i class="fa-solid fa-barcode"></i> كاشف الأسعار
+            </button>
+          </div>
+        </div>
+
+        <!-- شبكة أزرار MicroPOS الرئيسية -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          ${cards.map(c => `
+            <div onclick="navigate('${c.id}')" class="mpos-card p-5 flex flex-col items-center justify-center text-center cursor-pointer shadow-sm hover:shadow-md">
+              <div class="w-16 h-16 ${c.bg} ${c.color} rounded-2xl flex items-center justify-center text-3xl mb-3 shadow-inner">
+                <i class="fa-solid ${c.icon}"></i>
+              </div>
+              <h3 class="font-extrabold text-base text-gray-800">${c.title}</h3>
+              <p class="text-[11px] text-gray-500 mt-1">${c.sub}</p>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // ============================================================================
+    // 4. شاشة المبيعات المتعددة (1-4 + عروض أسعار + باركود + ضرائب) [مطابقة للصورة 42 و 43]
+    // ============================================================================
+    function renderSalesScreen(container) {
+      const slotKey = state.activePosSlot;
+      const slot = state.posSlots[slotKey];
+      const rep = getCurrentRep();
+      const whId = getActiveWarehouseId();
+
+      // حساب إجماليات شاشة البيع الحالية بدقة
+      let rawSum = 0;
+      slot.items.forEach(it => {
+        rawSum = R2(rawSum + R2(it.qty * it.price));
+      });
+      const discount = R2(slot.discount || 0);
+      const netAfterDiscount = Math.max(0, R2(rawSum - discount));
+
+      const selectedTax = state.settings.taxes.find(t => t.id === slot.taxId);
+      const taxRate = selectedTax ? Number(selectedTax.rate) : 0;
+      let taxAmount = 0;
+      let grandTotal = netAfterDiscount;
+
+      if (taxRate > 0) {
+        if (state.settings.priceIncludesTax) {
+          // السعر شامل الضريبة: استخراج الضريبة من الإجمالي
+          taxAmount = R2(netAfterDiscount - (netAfterDiscount / (1 + taxRate / 100)));
+          grandTotal = netAfterDiscount;
+        } else {
+          taxAmount = R2(netAfterDiscount * (taxRate / 100));
+          grandTotal = R2(netAfterDiscount + taxAmount);
+        }
+      }
+
+      const client = state.clients.find(c => Number(c.id) === Number(slot.clientId)) || state.clients[0];
+
+      container.innerHTML = `
+        <div class="space-y-3">
+          <!-- الشريط العلوي لشاشة المبيعات (زر حاسب + مربعات 1 2 3 4 + بحث باركود + اختيار عميل) -->
+          <div class="bg-white p-2.5 rounded-xl shadow-sm border flex flex-wrap items-center gap-2">
+            <!-- زر حاسب كما في MicroPOS -->
+            <button onclick="openCheckoutModal()" class="bg-gradient-to-b from-amber-300 to-amber-500 text-black font-extrabold px-4 py-2.5 rounded-xl shadow flex items-center gap-2 border border-amber-600">
+              <i class="fa-solid fa-hand-holding-dollar text-xl"></i>
+              <span>حاسب</span>
+            </button>
+
+            <!-- أيقونة الشاشات المتعددة 1 2 3 4 -->
+            <button onclick="openMultiPosSlotSelector()" class="grid grid-cols-2 border-2 border-black rounded overflow-hidden text-xs font-extrabold w-12 h-11 shadow-sm" title="فتح شاشة بيع رقم (1-4)">
+              <span class="${slotKey == 1 ? 'bg-green-500 text-white' : 'bg-white text-black'} flex items-center justify-center border-b border-l border-black">1</span>
+              <span class="${slotKey == 2 ? 'bg-green-500 text-white' : 'bg-white text-black'} flex items-center justify-center border-b border-black">2</span>
+              <span class="${slotKey == 3 ? 'bg-green-500 text-white' : 'bg-white text-black'} flex items-center justify-center border-l border-black">3</span>
+              <span class="${slotKey == 4 ? 'bg-green-500 text-white' : 'bg-white text-black'} flex items-center justify-center">4</span>
+            </button>
+
+            <!-- حقل البحث عن منتج أو باركود -->
+            <div class="flex-1 min-w-[200px] relative">
+              <input id="posSearchInput" type="text" oninput="filterPosProducts(this.value)" placeholder="ابحث عن منتج أو استخدم الكاميرا / الباركود..." class="w-full border-b-2 border-pink-500 bg-gray-50 px-3 py-2 text-sm focus:outline-none" />
+              <div id="posSearchResults" class="absolute inset-x-0 top-full bg-white shadow-xl border rounded-b-xl max-h-60 overflow-y-auto z-30 hidden"></div>
+            </div>
+
+            <!-- اختيار العميل -->
+            <select onchange="changePosClient(this.value)" class="bg-amber-50 border border-amber-300 text-amber-900 rounded-lg px-2.5 py-2 text-xs font-bold">
+              ${state.clients.map(c => `<option value="${c.id}" ${Number(c.id) === Number(slot.clientId) ? 'selected' : ''}>👤 ${c.name} (مديونية: ${fmt(c.balance)})</option>`).join('')}
+            </select>
+          </div>
+
+          <!-- شريط معلومات الشاشة المفتوحة والضريبة -->
+          <div class="flex flex-wrap justify-between items-center bg-emerald-900 text-white px-3 py-1.5 rounded-lg text-xs">
+            <div>
+              <strong>الشاشة النشطة:</strong>
+              <span class="bg-amber-400 text-black font-bold px-2 py-0.5 rounded ml-2">
+                ${slotKey === 'QUOTE' ? 'عرض سعر (لا يؤثر على المخزن)' : `شاشة بيع رقم ${slotKey}`}
+              </span>
+              <span>المخزن: <strong>${state.warehouses.find(w => w.id === whId)?.name}</strong></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span>الضريبة (+TAX):</span>
+              <select onchange="changePosTax(this.value)" class="bg-white text-black font-bold rounded px-2 py-0.5 text-xs">
+                <option value="NONE" ${slot.taxId === 'NONE' ? 'selected' : ''}>بدون ضريبة (0%)</option>
+                ${state.settings.taxes.map(t => `<option value="${t.id}" ${slot.taxId === t.id ? 'selected' : ''}>${t.code} (${t.rate}%)</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <!-- أزرار سريعة للأصناف المتاحة في المخزن -->
+          <div class="bg-white p-2.5 rounded-xl border shadow-sm">
+            <div class="text-xs font-bold text-gray-500 mb-2">أصناف سريعة الإضافة (الرصيد المتاح في مخزنك الحالي):</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+              ${state.products.map(p => {
+                const avail = getAvailableStock(p, whId);
+                return `
+                  <button onclick="addProductToPos(${p.id})" class="border rounded-lg p-2 text-right hover:bg-emerald-50 transition flex flex-col justify-between">
+                    <div class="font-bold text-xs text-gray-800 truncate">${p.name}</div>
+                    <div class="flex justify-between items-center mt-1 text-[11px]">
+                      <span class="font-extrabold text-emerald-700">${fmt(p.sellPrice)} ${state.settings.currency}</span>
+                      <span class="${avail <= p.minStock ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'} px-1.5 py-0.5 rounded font-bold">المتاح: ${avail}</span>
+                    </div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- جدول الفاتورة المطابق لـ MicroPOS: (المنتج | السعر | الكمية | بونص | الإجمالي) -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table class="w-full text-right text-xs">
+              <thead class="bg-gray-200 text-gray-700 font-bold">
+                <tr>
+                  <th class="p-2.5">المنتج</th>
+                  <th class="p-2.5">السعر</th>
+                  <th class="p-2.5">الكمية</th>
+                  <th class="p-2.5">بونص مجاني</th>
+                  <th class="p-2.5">الإجمالي</th>
+                  <th class="p-2.5 text-center">حذف</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                ${slot.items.length === 0 ? `
+                  <tr><td colspan="6" class="p-8 text-center text-gray-400 font-semibold">لا توجد أصناف في الفاتورة الحالية - اختر منتجاً بالأعلى</td></tr>
+                ` : slot.items.map((item, idx) => `
+                  <tr class="hover:bg-gray-50">
+                    <td class="p-2 font-bold">
+                      ${item.name}
+                      ${state.settings.showCostInPos && (!rep || rep.permissions.canViewCostAndProfit) ? `<div class="text-[10px] text-gray-400">التكلفة: ${fmt(item.cost)}</div>` : ''}
+                    </td>
+                    <td class="p-2">
+                      <input type="number" value="${item.price}" ${rep && !rep.permissions.canChangePrice ? 'readonly' : ''} onchange="updatePosItemPrice(${idx}, this.value)" class="w-20 border rounded p-1 text-center font-bold bg-gray-50" />
+                    </td>
+                    <td class="p-2">
+                      <input type="number" min="1" value="${item.qty}" onchange="updatePosItemQty(${idx}, this.value)" class="w-16 border rounded p-1 text-center font-bold" />
+                    </td>
+                    <td class="p-2">
+                      <input type="number" min="0" value="${item.bonus || 0}" onchange="updatePosItemBonus(${idx}, this.value)" class="w-16 border border-amber-400 bg-amber-50 rounded p-1 text-center font-bold text-amber-800" />
+                    </td>
+                    <td class="p-2 font-extrabold text-emerald-800">${fmt(item.qty * item.price)}</td>
+                    <td class="p-2 text-center">
+                      <button onclick="removePosItem(${idx})" class="text-red-600 hover:bg-red-50 px-2 py-1 rounded">✕</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- الشريط السفلي للإجمالي والخصم والضريبة في شاشة المبيعات -->
+          <div class="bg-white p-3 rounded-xl shadow border flex flex-wrap justify-between items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3 text-xs">
+              <label class="font-bold">خصم على الفاتورة:
+                <input type="number" min="0" value="${slot.discount}" ${rep && !rep.permissions.canApplyDiscount ? 'readonly' : ''} onchange="updatePosDiscount(this.value)" class="w-24 border rounded p-1 text-center font-bold mr-1" />
+              </label>
+              <span class="text-gray-600">الضريبة المضافة: <strong>${fmt(taxAmount)} ${state.settings.currency}</strong></span>
+              <span class="text-red-700 font-bold">مديونية العميل السابقة: ${fmt(client.balance)} ${state.settings.currency}</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="text-left">
+                <div class="text-[11px] text-gray-500">الإجمالي النهائي المطلوب:</div>
+                <div class="text-2xl font-extrabold text-emerald-800">${fmt(grandTotal)} <span class="text-xs">${state.settings.currency}</span></div>
+              </div>
+              <button onclick="openCheckoutModal()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-3 rounded-xl shadow text-sm">
+                <i class="fa-solid fa-check-double"></i> حاسب وحفظ الفاتورة
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // نافذة اختيار شاشة البيع 1-4 أو عرض سعر أو تصفية جميع الشاشات (مطابقة للصورة 42)
+    function openMultiPosSlotSelector() {
+      openModal(`
+        <div class="text-center space-y-3">
+          <h3 class="font-extrabold text-lg text-gray-800 mb-2">فتح شاشة بيع رقم</h3>
+          ${[1, 2, 3, 4].map(n => `
+            <button onclick="selectPosSlot(${n})" class="w-full py-3 rounded-xl border border-gray-400 bg-[#efffd8] hover:bg-lime-200 font-bold text-gray-800 shadow-sm flex justify-between px-6 items-center">
+              <span>شاشة بيع رقم ${n}</span>
+              <span class="text-xs bg-white px-2 py-0.5 rounded border">${state.posSlots[n].items.length} أصناف</span>
+            </button>
+          `).join('')}
+          <button onclick="selectPosSlot('QUOTE')" class="w-full py-3 rounded-xl border border-gray-400 bg-[#efffd8] hover:bg-lime-200 font-bold text-gray-800 shadow-sm">
+            عرض سعر (${state.posSlots.QUOTE.items.length} أصناف)
+          </button>
+          <button onclick="clearAllPosSlots()" class="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold shadow">
+            تصفية جميع الشاشات
+          </button>
+        </div>
+      `);
+    }
+
+    function selectPosSlot(slotKey) {
+      state.activePosSlot = slotKey;
+      saveState();
+      closeModal();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function clearAllPosSlots() {
+      if (!confirm('هل تريد تفريغ جميع شاشات البيع (1 إلى 4) وعروض الأسعار؟')) return;
+      [1, 2, 3, 4, 'QUOTE'].forEach(k => { state.posSlots[k].items = []; state.posSlots[k].discount = 0; });
+      saveState();
+      closeModal();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function filterPosProducts(q) {
+      const box = document.getElementById('posSearchResults');
+      if (!q.trim()) { box.classList.add('hidden'); return; }
+      const lower = q.trim().toLowerCase();
+      const matches = state.products.filter(p =>
+        p.name.toLowerCase().includes(lower) ||
+        p.barcode.includes(lower) ||
+        p.scientificName.toLowerCase().includes(lower)
+      );
+      if (matches.length === 0) {
+        box.innerHTML = `<div class="p-3 text-xs text-gray-400">لا توجد نتائج مطابقة</div>`;
+      } else {
+        box.innerHTML = matches.map(p => `
+          <div onclick="addProductToPos(${p.id}); document.getElementById('posSearchResults').classList.add('hidden');" class="p-2.5 hover:bg-emerald-50 cursor-pointer border-b flex justify-between items-center text-xs">
+            <div>
+              <div class="font-bold">${p.name}</div>
+              <div class="text-[10px] text-gray-500">باركود: ${p.barcode} | المادة: ${p.scientificName}</div>
+            </div>
+            <div class="font-bold text-emerald-700">${fmt(p.sellPrice)} ${state.settings.currency} (المتاح: ${getAvailableStock(p)})</div>
+          </div>
+        `).join('');
+      }
+      box.classList.remove('hidden');
+    }
+
+    function addProductToPos(productId) {
+      const slot = state.posSlots[state.activePosSlot];
+      const prod = state.products.find(p => Number(p.id) === Number(productId));
+      if (!prod) return;
+
+      const whId = getActiveWarehouseId();
+      const avail = getAvailableStock(prod, whId);
+      const existing = slot.items.find(i => Number(i.productId) === Number(productId));
+      const currentRequired = existing ? (existing.qty + (existing.bonus || 0) + 1) : 1;
+
+      if (state.activePosSlot !== 'QUOTE' && state.settings.blockZeroStock && currentRequired > avail) {
+        alert(`تنبيه مخزني: الرصيد المتاح من (${prod.name}) في المخزن الحالي هو (${avail}) فقط!`);
+        return;
+      }
+
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        slot.items.push({
+          productId: prod.id,
+          name: prod.name,
+          qty: 1,
+          bonus: 0,
+          price: prod.sellPrice,
+          cost: prod.costPrice
+        });
+      }
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function updatePosItemPrice(idx, val) {
+      const slot = state.posSlots[state.activePosSlot];
+      const item = slot.items[idx];
+      const newPrice = Math.max(0, Number(val) || 0);
+      if (state.settings.preventSellBelowCost && newPrice < item.cost) {
+        alert(`منع محاسبي: لا يُسمح بالبيع بأقل من سعر التكلفة (${fmt(item.cost)} ${state.settings.currency})!`);
+        renderSalesScreen(document.getElementById('mainContainer'));
+        return;
+      }
+      item.price = R2(newPrice);
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function updatePosItemQty(idx, val) {
+      const slot = state.posSlots[state.activePosSlot];
+      const item = slot.items[idx];
+      const prod = state.products.find(p => Number(p.id) === Number(item.productId));
+      const newQty = Math.max(1, parseInt(val) || 1);
+      const avail = getAvailableStock(prod, getActiveWarehouseId());
+
+      if (state.activePosSlot !== 'QUOTE' && state.settings.blockZeroStock && (newQty + (item.bonus || 0)) > avail) {
+        alert(`الكمية المطلوبة مع البونص تتجاوز الرصيد المتاح (${avail})!`);
+        renderSalesScreen(document.getElementById('mainContainer'));
+        return;
+      }
+      item.qty = newQty;
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function updatePosItemBonus(idx, val) {
+      const slot = state.posSlots[state.activePosSlot];
+      const item = slot.items[idx];
+      const prod = state.products.find(p => Number(p.id) === Number(item.productId));
+      const newBonus = Math.max(0, parseInt(val) || 0);
+      const avail = getAvailableStock(prod, getActiveWarehouseId());
+
+      if (state.activePosSlot !== 'QUOTE' && state.settings.blockZeroStock && (item.qty + newBonus) > avail) {
+        alert(`الكمية مع البونص تتجاوز الرصيد المتاح (${avail})!`);
+        renderSalesScreen(document.getElementById('mainContainer'));
+        return;
+      }
+      item.bonus = newBonus;
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function removePosItem(idx) {
+      state.posSlots[state.activePosSlot].items.splice(idx, 1);
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function updatePosDiscount(val) {
+      state.posSlots[state.activePosSlot].discount = Math.max(0, R2(val));
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function changePosClient(clientId) {
+      state.posSlots[state.activePosSlot].clientId = Number(clientId);
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    function changePosTax(taxId) {
+      state.posSlots[state.activePosSlot].taxId = taxId;
+      saveState();
+      renderSalesScreen(document.getElementById('mainContainer'));
+    }
+
+    // نافذة إتمام الدفع وترحيل الفاتورة محاسبياً ومخزنياً
+    function openCheckoutModal() {
+      const slotKey = state.activePosSlot;
+      const slot = state.posSlots[slotKey];
+      if (slot.items.length === 0) { alert('الفاتورة فارغة!'); return; }
+
+      let subtotal = 0;
+      slot.items.forEach(i => subtotal = R2(subtotal + R2(i.qty * i.price)));
+      const discount = R2(slot.discount || 0);
+      const net = Math.max(0, R2(subtotal - discount));
+      const taxObj = state.settings.taxes.find(t => t.id === slot.taxId);
+      const taxRate = taxObj ? Number(taxObj.rate) : 0;
+      const taxAmount = taxRate > 0
+        ? (state.settings.priceIncludesTax ? R2(net - (net / (1 + taxRate / 100))) : R2(net * (taxRate / 100)))
+        : 0;
+      const grandTotal = state.settings.priceIncludesTax ? net : R2(net + taxAmount);
+
+      openModal(`
+        <div class="space-y-4 text-sm">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-extrabold text-base text-emerald-800">اعتماد وترحيل الفاتورة (${slotKey === 'QUOTE' ? 'عرض سعر' : `شاشة ${slotKey}`})</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <div class="bg-emerald-50 p-3 rounded-xl space-y-1 text-xs">
+            <div class="flex justify-between"><span>الإجمالي قبل الخصم:</span><strong>${fmt(subtotal)} ${state.settings.currency}</strong></div>
+            <div class="flex justify-between"><span>الخصم:</span><strong>${fmt(discount)} ${state.settings.currency}</strong></div>
+            <div class="flex justify-between"><span>الضريبة (${taxRate}%):</span><strong>${fmt(taxAmount)} ${state.settings.currency}</strong></div>
+            <div class="flex justify-between text-base font-extrabold text-emerald-900 border-t pt-1"><span>الصافي المطلوب:</span><span>${fmt(grandTotal)} ${state.settings.currency}</span></div>
+          </div>
+
+          ${slotKey === 'QUOTE' ? `
+            <p class="text-xs text-amber-800 bg-amber-50 p-2 rounded">سيتم حفظ هذا المستند كـ (عرض سعر) للعميل دون خصم من المخزن أو تأثير على الصندوق.</p>
+          ` : `
+            <div>
+              <label class="block font-bold text-xs mb-1">طريقة الدفع:</label>
+              <div class="grid grid-cols-4 gap-2 text-xs font-bold">
+                ${['نقدا', 'آجل', 'بطاقة', 'شيك'].map(m => `
+                  <label class="border rounded-lg p-2 text-center cursor-pointer bg-gray-50">
+                    <input type="radio" name="checkoutPayMethod" value="${m}" ${m === 'نقدا' ? 'checked' : ''} onchange="onCheckoutMethodChange(this.value, ${grandTotal})" /> ${m}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="block font-bold text-xs mb-1">المبلغ المدفوع الآن (والباقي يُرحل لذمم العميل تلقائياً):</label>
+              <input id="checkoutPaidInput" type="number" step="0.01" value="${grandTotal}" class="w-full border-2 border-emerald-600 rounded-lg p-2 font-extrabold text-center text-lg" />
+            </div>
+          `}
+
+          <div class="flex gap-2 pt-2">
+            <button onclick="commitSalesInvoice(${grandTotal}, ${subtotal}, ${discount}, ${taxRate}, ${taxAmount}, true)" class="flex-1 bg-emerald-700 text-white font-bold py-2.5 rounded-xl">
+              <i class="fa-solid fa-print"></i> حفظ وطباعة الفاتورة
+            </button>
+            <button onclick="commitSalesInvoice(${grandTotal}, ${subtotal}, ${discount}, ${taxRate}, ${taxAmount}, false)" class="flex-1 bg-gray-800 text-white font-bold py-2.5 rounded-xl">
+              حفظ فقط
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function onCheckoutMethodChange(method, grandTotal) {
+      const inp = document.getElementById('checkoutPaidInput');
+      if (!inp) return;
+      if (method === 'آجل') inp.value = 0;
+      else inp.value = grandTotal;
+    }
+
+    function commitSalesInvoice(grandTotal, subtotal, discount, taxRate, taxAmount, shouldPrint) {
+      const slotKey = state.activePosSlot;
+      const slot = state.posSlots[slotKey];
+      const rep = getCurrentRep();
+      const whId = getActiveWarehouseId();
+      const client = state.clients.find(c => Number(c.id) === Number(slot.clientId)) || state.clients[0];
+
+      if (slotKey === 'QUOTE') {
+        const quoteId = Date.now() % 100000;
+        state.invoices.unshift({
+          id: quoteId,
+          number: `QUO-${quoteId}`,
+          type: 'QUOTE',
+          date: todayStr(),
+          partyId: client.id,
+          partyName: client.name,
+          warehouseId: whId,
+          repId: rep ? rep.id : 0,
+          payMethod: 'عرض سعر',
+          subtotal,
+          discount,
+          taxRate,
+          taxAmount,
+          grandTotal,
+          paidAmount: 0,
+          remainingAmount: 0,
+          totalCost: 0,
+          status: 'ACTIVE',
+          items: JSON.parse(JSON.stringify(slot.items))
+        });
+        slot.items = [];
+        slot.discount = 0;
+        saveState();
+        closeModal();
+        alert('تم حفظ عرض السعر بنجاح في سجل عروض الأسعار!');
+        renderSalesScreen(document.getElementById('mainContainer'));
+        return;
+      }
+
+      const methodRadio = document.querySelector('input[name="checkoutPayMethod"]:checked');
+      const payMethod = methodRadio ? methodRadio.value : 'نقدا';
+      const paidInput = document.getElementById('checkoutPaidInput');
+      const paidAmount = Math.min(grandTotal, Math.max(0, R2(paidInput ? paidInput.value : grandTotal)));
+      const remainingAmount = R2(grandTotal - paidAmount);
+
+      if (remainingAmount > 0 && (!state.settings.allowCreditSale || (rep && !rep.permissions.canCreditSale))) {
+        alert('عفواً، البيع الآجل غير مسموح به حسب إعدادات النظام أو صلاحيات المندوب!');
+        return;
+      }
+
+      // 1. خصم الكميات المباعة + كميات البونص من المخزن وحساب التكلفة الحقيقية (COGS)
+      let totalCost = 0;
+      for (const it of slot.items) {
+        const totalUnits = Number(it.qty) + Number(it.bonus || 0);
+        adjustStock(it.productId, whId, -totalUnits);
+        totalCost = R2(totalCost + R2(totalUnits * Number(it.cost)));
+      }
+
+      // 2. تحديث مديونية العميل بالمتبقي فقط
+      if (remainingAmount > 0) {
+        client.balance = R2(client.balance + remainingAmount);
+      }
+
+      // 3. تحديث الصندوق أو عهدة المندوب بالمدفوع الفعلي فقط دون مضاعفة
+      const invId = (state.invoices.length > 0 ? Math.max(...state.invoices.map(i => i.id)) : 1000) + 1;
+      const invNumber = `INV-${invId}`;
+
+      if (paidAmount > 0) {
+        if (rep) {
+          rep.cashCustody = R2(rep.cashCustody + paidAmount);
+        } else {
+          state.cashTransactions.unshift({
+            id: Date.now() % 100000,
+            date: todayStr(),
+            type: 'IN',
+            payMethod,
+            amount: paidAmount,
+            category: 'مبيعات',
+            partyName: client.name,
+            notes: `تحصيل فاتورة مبيعات ${invNumber}`,
+            repId: null,
+            status: 'ACTIVE'
+          });
+        }
+      }
+
+      const newInvoice = {
+        id: invId,
+        number: invNumber,
+        type: 'SALE',
+        date: todayStr(),
+        partyId: client.id,
+        partyName: client.name,
+        warehouseId: whId,
+        repId: rep ? rep.id : 0,
+        payMethod: remainingAmount > 0 && paidAmount === 0 ? 'آجل' : payMethod,
+        subtotal,
+        discount,
+        taxRate,
+        taxAmount,
+        grandTotal,
+        paidAmount,
+        remainingAmount,
+        totalCost,
+        status: 'ACTIVE',
+        items: JSON.parse(JSON.stringify(slot.items))
+      };
+
+      state.invoices.unshift(newInvoice);
+      slot.items = [];
+      slot.discount = 0;
+      saveState();
+      closeModal();
+
+      if (shouldPrint) {
+        printInvoiceReceipt(newInvoice, client);
+      } else {
+        alert(`تم حفظ الفاتورة رقم ${invNumber} بنجاح!`);
+        renderSalesScreen(document.getElementById('mainContainer'));
+      }
+    }
+
+    // ============================================================================
+    // 5. شاشة المشتريات (مطابقة للصورة 41)
+    // ============================================================================
+    let tempPurchaseItems = [];
+
+    function renderPurchasesScreen(container) {
+      const total = tempPurchaseItems.reduce((s, i) => R2(s + R2(i.qty * i.cost)), 0);
+
+      container.innerHTML = `
+        <div class="bg-white p-4 rounded-xl shadow-sm border space-y-3">
+          <div class="flex flex-wrap justify-between items-center gap-2 border-b pb-3">
+            <h2 class="font-extrabold text-base text-blue-900"><i class="fa-solid fa-dolly"></i> فاتورة مشتريات وتوريد للمخزن</h2>
+            <div class="flex items-center gap-2 text-xs">
+              <label>تاريخ الفاتورة:
+                <input id="purchDate" type="date" value="${todayStr()}" class="border rounded p-1 font-bold" />
+              </label>
+              <select id="purchSupplierId" class="border rounded p-1.5 font-bold bg-blue-50">
+                ${state.suppliers.map(s => `<option value="${s.id}">🚛 المورد: ${s.name} (له: ${fmt(s.balance)})</option>`).join('')}
+              </select>
+              <select id="purchPayMethod" class="border rounded p-1.5 font-bold">
+                <option value="نقدا">نقدا</option>
+                <option value="آجل">آجل</option>
+                <option value="بطاقة">بطاقة</option>
+                <option value="شيك">شيك</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- إضافة صنف لفاتورة المشتريات -->
+          <div class="flex flex-wrap gap-2">
+            <select id="purchProdSelect" class="border rounded-lg p-2 text-xs font-bold flex-1">
+              ${state.products.map(p => `<option value="${p.id}">${p.name} (تكلفة حالية: ${fmt(p.costPrice)})</option>`).join('')}
+            </select>
+            <input id="purchQtyInput" type="number" min="1" value="10" placeholder="الكمية" class="w-24 border rounded-lg p-2 text-xs text-center font-bold" />
+            <input id="purchCostInput" type="number" step="0.01" placeholder="سعر التكلفة (اختياري)" class="w-36 border rounded-lg p-2 text-xs text-center" />
+            <button onclick="addPurchaseLine()" class="bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold">+ إدراج بالفاتورة</button>
+          </div>
+
+          <table class="w-full text-right text-xs border">
+            <thead class="bg-gray-100 font-bold">
+              <tr>
+                <th class="p-2">المنتج</th>
+                <th class="p-2">التكلفة</th>
+                <th class="p-2">الكمية</th>
+                <th class="p-2">الإجمالي</th>
+                <th class="p-2">حذف</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              ${tempPurchaseItems.length === 0 ? `<tr><td colspan="5" class="p-6 text-center text-gray-400">أضف أصنافاً لفاتورة المشتريات</td></tr>` :
+                tempPurchaseItems.map((it, idx) => `
+                  <tr>
+                    <td class="p-2 font-bold">${it.name}</td>
+                    <td class="p-2">${fmt(it.cost)}</td>
+                    <td class="p-2">${it.qty}</td>
+                    <td class="p-2 font-bold text-blue-800">${fmt(it.qty * it.cost)}</td>
+                    <td class="p-2"><button onclick="tempPurchaseItems.splice(${idx},1); renderPurchasesScreen(document.getElementById('mainContainer'))" class="text-red-600">✕</button></td>
+                  </tr>
+                `).join('')}
+            </tbody>
+          </table>
+
+          <div class="flex justify-between items-center pt-2 border-t">
+            <div class="text-lg font-extrabold text-blue-900">إجمالي المشتريات: ${fmt(total)} ${state.settings.currency}</div>
+            <button onclick="savePurchaseInvoice(${total})" class="bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow">
+              حفظ وتوريد للمخزن الرئيسي
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function addPurchaseLine() {
+      const prodId = Number(document.getElementById('purchProdSelect').value);
+      const qty = Math.max(1, parseInt(document.getElementById('purchQtyInput').value) || 1);
+      const customCost = parseFloat(document.getElementById('purchCostInput').value);
+      const prod = state.products.find(p => p.id === prodId);
+      if (!prod) return;
+      const cost = !isNaN(customCost) && customCost > 0 ? R2(customCost) : prod.costPrice;
+      tempPurchaseItems.push({ productId: prod.id, name: prod.name, qty, cost, price: cost, bonus: 0 });
+      renderPurchasesScreen(document.getElementById('mainContainer'));
+    }
+
+    function savePurchaseInvoice(total) {
+      if (tempPurchaseItems.length === 0) { alert('أضف أصنافاً أولاً!'); return; }
+      const suppId = Number(document.getElementById('purchSupplierId').value);
+      const supplier = state.suppliers.find(s => s.id === suppId);
+      const payMethod = document.getElementById('purchPayMethod').value;
+      const date = document.getElementById('purchDate').value || todayStr();
+
+      // زيادة المخزن الرئيسي وتحديث سعر التكلفة
+      tempPurchaseItems.forEach(it => {
+        adjustStock(it.productId, 1, it.qty);
+        const prod = state.products.find(p => p.id === it.productId);
+        if (prod) prod.costPrice = it.cost;
+      });
+
+      const paidAmount = payMethod === 'آجل' ? 0 : total;
+      const remainingAmount = R2(total - paidAmount);
+
+      if (remainingAmount > 0 && supplier) {
+        supplier.balance = R2(supplier.balance + remainingAmount);
+      }
+
+      const invId = (state.invoices.length > 0 ? Math.max(...state.invoices.map(i => i.id)) : 1000) + 1;
+      const invNumber = `PUR-${invId}`;
+
+      if (paidAmount > 0) {
+        state.cashTransactions.unshift({
+          id: Date.now() % 100000,
+          date,
+          type: 'OUT',
+          payMethod,
+          amount: paidAmount,
+          category: 'مشتريات',
+          partyName: supplier ? supplier.name : 'مورد',
+          notes: `سداد فاتورة مشتريات ${invNumber}`,
+          repId: null,
+          status: 'ACTIVE'
+        });
+      }
+
+      state.invoices.unshift({
+        id: invId,
+        number: invNumber,
+        type: 'PURCHASE',
+        date,
+        partyId: supplier.id,
+        partyName: supplier.name,
+        warehouseId: 1,
+        repId: 0,
+        payMethod,
+        subtotal: total,
+        discount: 0,
+        taxRate: 0,
+        taxAmount: 0,
+        grandTotal: total,
+        paidAmount,
+        remainingAmount,
+        totalCost: total,
+        status: 'ACTIVE',
+        items: JSON.parse(JSON.stringify(tempPurchaseItems))
+      });
+
+      tempPurchaseItems = [];
+      saveState();
+      alert(`تم حفظ فاتورة المشتريات ${invNumber} وإضافة الكميات للمخزن الرئيسي!`);
+      renderPurchasesScreen(document.getElementById('mainContainer'));
+    }
+
+    // ============================================================================
+    // 6. شاشة العملاء وذمم العملاء وكشف الحساب التفصيلي (مطابقة للصور 3 و 5 و 6 و 40)
+    // ============================================================================
+    function renderClientsScreen(container) {
+      const totalDebt = state.clients.reduce((s, c) => R2(s + Math.max(0, c.balance)), 0);
+
+      container.innerHTML = `
+        <div class="space-y-4">
+          <!-- القائمة العلوية كما في الصورة 40 -->
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-bold">
+            <button onclick="openAddClientModal()" class="bg-emerald-700 text-white p-3 rounded-xl shadow flex items-center justify-center gap-2">
+              <i class="fa-solid fa-user-plus"></i> + إضافة عميل جديد
+            </button>
+            <button onclick="openClientOpeningBalancesModal()" class="bg-white border p-3 rounded-xl hover:bg-gray-50">
+              الأرصدة الافتتاحية والمبالغ النقدية للعملاء
+            </button>
+            <button onclick="printClientsDebtReport()" class="bg-amber-500 text-black p-3 rounded-xl shadow">
+              <i class="fa-solid fa-file-pdf"></i> ذمم العملاء - تقرير PDF (${fmt(totalDebt)})
+            </button>
+          </div>
+
+          <!-- جدول ذمم العملاء كما في الصورة 6 -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-3 bg-gray-100 border-b flex justify-between items-center">
+              <h3 class="font-extrabold text-sm text-gray-800">ذمم العملاء - المبالغ المتبقية عند العملاء (انقر على العميل لكشف الحساب أو التحصيل)</h3>
+              <input type="text" oninput="filterClientRows(this.value)" placeholder="بحث باسم العميل..." class="border rounded-lg px-3 py-1 text-xs" />
+            </div>
+            <table class="w-full text-right text-xs">
+              <thead class="bg-gray-200 font-bold">
+                <tr>
+                  <th class="p-2.5">#</th>
+                  <th class="p-2.5">بيانات العميل</th>
+                  <th class="p-2.5">المدينة / العنوان</th>
+                  <th class="p-2.5">المبلغ الباقي (عليه)</th>
+                  <th class="p-2.5 text-center">إجراءات سريعة</th>
+                </tr>
+              </thead>
+              <tbody id="clientsTableBody" class="divide-y">
+                ${state.clients.map(c => `
+                  <tr class="hover:bg-emerald-50/40 client-row" data-name="${c.name}">
+                    <td class="p-2.5 font-bold">${c.id}</td>
+                    <td class="p-2.5 font-extrabold text-gray-800">${c.name} <div class="text-[10px] text-gray-500">${c.phone}</div></td>
+                    <td class="p-2.5 text-gray-600">${c.city} - ${c.address}</td>
+                    <td class="p-2.5 font-extrabold text-sm ${c.balance > 0 ? 'text-red-600' : 'text-emerald-700'}">${fmt(c.balance)}</td>
+                    <td class="p-2.5 text-center space-x-1 space-x-reverse">
+                      <button onclick="openClientReceiptModal(${c.id})" class="bg-emerald-600 text-white px-2.5 py-1 rounded font-bold">سند قبض</button>
+                      <button onclick="generatePartyStatementPDF('CLIENT', ${c.id})" class="bg-gray-800 text-white px-2.5 py-1 rounded font-bold">
+                        <i class="fa-solid fa-file-invoice"></i> كشف حساب PDF
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function filterClientRows(q) {
+      document.querySelectorAll('.client-row').forEach(row => {
+        row.style.display = row.dataset.name.includes(q.trim()) ? '' : 'none';
+      });
+    }
+
+    // نافذة إضافة عميل جديد (مطابقة للصورة 5 بكل حقولها)
+    function openAddClientModal() {
+      openModal(`
+        <div class="space-y-2.5 text-xs">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-extrabold text-sm text-emerald-800">+ إضافة عميل جديد</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <input id="ncId" type="number" placeholder="رقم العميل (اتركه فارغاً لإضافته آلياً)" class="w-full border rounded p-2" />
+          <input id="ncBarcode" type="text" placeholder="باركود العميل" class="w-full border rounded p-2" />
+          <input id="ncName" type="text" placeholder="اسم العميل *" class="w-full border rounded p-2 font-bold" />
+          <input id="ncAddress" type="text" placeholder="العنوان" class="w-full border rounded p-2" />
+          <input id="ncTax" type="text" placeholder="الرقم الضريبي للعميل" class="w-full border rounded p-2" />
+          <input id="ncCr" type="text" placeholder="رقم السجل التجاري" class="w-full border rounded p-2" />
+          <input id="ncPhone" type="text" placeholder="رقم الهاتف" class="w-full border rounded p-2" />
+          <div class="grid grid-cols-3 gap-2">
+            <input id="ncCity" type="text" placeholder="المدينة" class="border rounded p-2" />
+            <input id="ncStreet" type="text" placeholder="اسم الشارع" class="border rounded p-2" />
+            <input id="ncBuilding" type="text" placeholder="رقم المبنى" class="border rounded p-2" />
+          </div>
+          <input id="ncOpening" type="number" step="0.01" placeholder="الرصيد الافتتاحي (عليه)" class="w-full border rounded p-2 font-bold" />
+          <button onclick="saveNewClient()" class="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm mt-2">حفظ</button>
+        </div>
+      `);
+    }
+
+    function saveNewClient() {
+      const name = document.getElementById('ncName').value.trim();
+      if (!name) { alert('اكتب اسم العميل!'); return; }
+      const customId = parseInt(document.getElementById('ncId').value);
+      const id = customId || (Math.max(...state.clients.map(c => c.id), 60) + 1);
+      const opening = R2(document.getElementById('ncOpening').value || 0);
+
+      state.clients.push({
+        id,
+        code: document.getElementById('ncBarcode').value || `C-${id}`,
+        name,
+        phone: document.getElementById('ncPhone').value,
+        city: document.getElementById('ncCity').value,
+        address: `${document.getElementById('ncAddress').value} ${document.getElementById('ncStreet').value}`,
+        taxNo: document.getElementById('ncTax').value,
+        crNo: document.getElementById('ncCr').value,
+        openingBalance: opening,
+        balance: opening,
+        repId: getCurrentRep()?.id || 1
+      });
+      saveState();
+      closeModal();
+      renderClientsScreen(document.getElementById('mainContainer'));
+    }
+
+    function openClientReceiptModal(clientId) {
+      const client = state.clients.find(c => c.id === clientId);
+      if (!client) return;
+      openModal(`
+        <div class="space-y-3 text-xs">
+          <h3 class="font-extrabold text-sm text-emerald-800">سند قبض (تسديد دفعة من عميل): ${client.name}</h3>
+          <div class="bg-red-50 text-red-800 p-2.5 rounded font-bold">المديونية الحالية على العميل: ${fmt(client.balance)} ${state.settings.currency}</div>
+          <input id="recAmount" type="number" step="0.01" value="${client.balance}" placeholder="المبلغ المسدد" class="w-full border-2 border-emerald-600 rounded p-2 text-center font-extrabold text-base" />
+          <select id="recMethod" class="w-full border rounded p-2 font-bold">
+            <option value="نقدا">نقدا</option>
+            <option value="بطاقة">بطاقة</option>
+            <option value="شيك">شيك</option>
+          </select>
+          <input id="recNotes" type="text" placeholder="البيان / ملاحظات السند" class="w-full border rounded p-2" />
+          <button onclick="commitClientReceipt(${client.id})" class="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm">حفظ سند القبض</button>
+        </div>
+      `);
+    }
+
+    function commitClientReceipt(clientId) {
+      const client = state.clients.find(c => c.id === clientId);
+      const amt = R2(document.getElementById('recAmount').value || 0);
+      const method = document.getElementById('recMethod').value;
+      const notes = document.getElementById('recNotes').value || 'سند قبض من عميل';
+      if (amt <= 0) return;
+
+      client.balance = R2(client.balance - amt);
+      const rep = getCurrentRep();
+      if (rep) {
+        rep.cashCustody = R2(rep.cashCustody + amt);
+      } else {
+        state.cashTransactions.unshift({
+          id: Date.now() % 100000,
+          date: todayStr(),
+          type: 'IN',
+          payMethod: method,
+          amount: amt,
+          category: 'سند قبض عميل',
+          partyName: client.name,
+          notes,
+          repId: null,
+          status: 'ACTIVE'
+        });
+      }
+      saveState();
+      closeModal();
+      renderClientsScreen(document.getElementById('mainContainer'));
+    }
+
+    function openClientOpeningBalancesModal() {
+      openModal(`
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between border-b pb-2">
+            <h3 class="font-bold text-sm">الأرصدة الافتتاحية والمبالغ النقدية للعملاء (له / عليه)</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <table class="w-full text-right border">
+            <thead class="bg-gray-100 font-bold"><tr><th class="p-2">#</th><th class="p-2">العميل</th><th class="p-2">عليه (مدين)</th><th class="p-2">له (دائن)</th></tr></thead>
+            <tbody class="divide-y">
+              ${state.clients.map(c => `
+                <tr>
+                  <td class="p-2">${c.id}</td>
+                  <td class="p-2 font-bold">${c.name}</td>
+                  <td class="p-2 text-red-600 font-bold">${c.balance > 0 ? fmt(c.balance) : '0.00'}</td>
+                  <td class="p-2 text-emerald-700 font-bold">${c.balance < 0 ? fmt(Math.abs(c.balance)) : '0.00'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `);
+    }
+
+    // ============================================================================
+    // 7. شاشة الموردين (مطابقة للصورة 4 و 39)
+    // ============================================================================
+    function renderSuppliersScreen(container) {
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex flex-wrap justify-between items-center bg-white p-3 rounded-xl border shadow-sm">
+            <h2 class="font-extrabold text-base text-cyan-900">الأرصدة الافتتاحية والمبالغ النقدية للموردين (له / عليه)</h2>
+            <button onclick="openAddSupplierModal()" class="bg-cyan-700 text-white px-4 py-2 rounded-lg text-xs font-bold">+ إضافة مورد جديد</button>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table class="w-full text-right text-xs">
+              <thead class="bg-gray-200 font-bold">
+                <tr>
+                  <th class="p-2.5">#</th>
+                  <th class="p-2.5">بيانات المورد</th>
+                  <th class="p-2.5">له (دائن)</th>
+                  <th class="p-2.5">عليه (مدين)</th>
+                  <th class="p-2.5 text-center">سند صرف / كشف حساب</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                ${state.suppliers.map(s => `
+                  <tr class="hover:bg-gray-50">
+                    <td class="p-2.5 font-bold">${s.id}</td>
+                    <td class="p-2.5 font-extrabold">${s.name} <div class="text-[10px] text-gray-500">${s.phone} - ${s.address}</div></td>
+                    <td class="p-2.5 font-bold text-red-600">${s.balance > 0 ? fmt(s.balance) : '0.00'}</td>
+                    <td class="p-2.5 font-bold text-emerald-700">${s.balance < 0 ? fmt(Math.abs(s.balance)) : '0.00'}</td>
+                    <td class="p-2.5 text-center space-x-1 space-x-reverse">
+                      <button onclick="openSupplierPaymentModal(${s.id})" class="bg-amber-500 text-black px-2.5 py-1 rounded font-bold">سند صرف لمورد</button>
+                      <button onclick="generatePartyStatementPDF('SUPPLIER', ${s.id})" class="bg-gray-800 text-white px-2.5 py-1 rounded font-bold">كشف حساب PDF</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function openAddSupplierModal() {
+      openModal(`
+        <div class="space-y-3 text-xs">
+          <h3 class="font-bold text-sm">+ إضافة مورد جديد</h3>
+          <input id="nsName" type="text" placeholder="اسم المورد" class="w-full border rounded p-2 font-bold" />
+          <input id="nsPhone" type="text" placeholder="رقم الهاتف" class="w-full border rounded p-2" />
+          <input id="nsAddress" type="text" placeholder="العنوان" class="w-full border rounded p-2" />
+          <input id="nsBalance" type="number" step="0.01" placeholder="الرصيد الافتتاحي للمورد (له)" class="w-full border rounded p-2" />
+          <button onclick="saveNewSupplier()" class="w-full bg-cyan-700 text-white font-bold py-2 rounded-lg">حفظ المورد</button>
+        </div>
+      `);
+    }
+
+    function saveNewSupplier() {
+      const name = document.getElementById('nsName').value.trim();
+      if (!name) return;
+      const id = Math.max(...state.suppliers.map(s => s.id), 9) + 1;
+      const bal = R2(document.getElementById('nsBalance').value || 0);
+      state.suppliers.push({
+        id,
+        name,
+        phone: document.getElementById('nsPhone').value,
+        address: document.getElementById('nsAddress').value,
+        openingBalance: bal,
+        balance: bal
+      });
+      saveState();
+      closeModal();
+      renderSuppliersScreen(document.getElementById('mainContainer'));
+    }
+
+    function openSupplierPaymentModal(suppId) {
+      const supp = state.suppliers.find(s => s.id === suppId);
+      if (!supp) return;
+      openModal(`
+        <div class="space-y-3 text-xs">
+          <h3 class="font-bold text-sm">سند صرف لمورد: ${supp.name}</h3>
+          <div>الرصيد المستحق للمورد: <strong>${fmt(supp.balance)} ${state.settings.currency}</strong></div>
+          <input id="spAmt" type="number" value="${supp.balance}" class="w-full border rounded p-2 font-bold text-center text-base" />
+          <select id="spMethod" class="w-full border rounded p-2 font-bold">
+            <option value="نقدا">نقدا</option>
+            <option value="بطاقة">بطاقة</option>
+            <option value="شيك">شيك</option>
+          </select>
+          <button onclick="commitSupplierPayment(${supp.id})" class="w-full bg-cyan-700 text-white font-bold py-2 rounded-lg">تأكيد الصرف</button>
+        </div>
+      `);
+    }
+
+    function commitSupplierPayment(suppId) {
+      const supp = state.suppliers.find(s => s.id === suppId);
+      const amt = R2(document.getElementById('spAmt').value || 0);
+      const method = document.getElementById('spMethod').value;
+      if (amt <= 0) return;
+      supp.balance = R2(supp.balance - amt);
+      state.cashTransactions.unshift({
+        id: Date.now() % 100000,
+        date: todayStr(),
+        type: 'OUT',
+        payMethod: method,
+        amount: amt,
+        category: 'سند صرف لمورد',
+        partyName: supp.name,
+        notes: `سداد دفعة للمورد ${supp.name}`,
+        repId: null,
+        status: 'ACTIVE'
+      });
+      saveState();
+      closeModal();
+      renderSuppliersScreen(document.getElementById('mainContainer'));
+    }
+
+    // ============================================================================
+    // 8. شاشة الصندوق والمصروفات (مطابقة للصورة 37 و 38)
+    // ============================================================================
+    function renderSafeScreen(container) {
+      const safe = computeSafeBalances();
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm border space-y-3 text-xs">
+            <h3 class="font-extrabold text-base text-amber-800 border-b pb-2"><i class="fa-solid fa-vault"></i> الصندوق (إضافة / خصم من الصندوق)</h3>
+            <div class="flex gap-3 font-bold">
+              <label class="flex-1 bg-emerald-50 border border-emerald-300 p-2 rounded text-center cursor-pointer">
+                <input type="radio" name="safeOpType" value="IN" checked /> إضافة للصندوق
+              </label>
+              <label class="flex-1 bg-red-50 border border-red-300 p-2 rounded text-center cursor-pointer">
+                <input type="radio" name="safeOpType" value="OUT" /> خصم من الصندوق
+              </label>
+            </div>
+            <div class="flex gap-2 font-bold">
+              ${['نقدا', 'بطاقة', 'شيك'].map((m, i) => `
+                <label class="flex-1 border p-2 rounded text-center cursor-pointer">
+                  <input type="radio" name="safePayMethod" value="${m}" ${i === 0 ? 'checked' : ''} /> ${m}
+                </label>
+              `).join('')}
+            </div>
+            <input id="safeAmountInput" type="number" step="0.01" placeholder="أدخل المبلغ" class="w-full border rounded-lg p-2.5 text-center font-extrabold text-base" />
+            <input id="safeDateInput" type="date" value="${todayStr()}" class="w-full border rounded-lg p-2" />
+            <input id="safeNotesInput" type="text" placeholder="البيان / سبب الحركة" class="w-full border rounded-lg p-2" />
+
+            <div class="bg-gray-50 p-3 rounded-lg space-y-1 text-[11px] text-gray-600">
+              <div>☑ إضافة مبالغ المبيعات والعملاء للصندوق تلقائياً</div>
+              <div>☑ خصم مبالغ المشتريات والموردين من الصندوق تلقائياً</div>
+              <div>☑ خصم مبالغ المصروفات من الصندوق تلقائياً</div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-300 p-3 rounded-xl flex justify-between items-center">
+              <span class="font-bold">الرصيد الإجمالي في الصندوق:</span>
+              <span class="font-extrabold text-xl text-emerald-800">${fmt(safe.totalSafe)} ${state.settings.currency}</span>
+            </div>
+
+            <button onclick="saveSafeTransaction()" class="w-full bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm">حفظ الحركة في الصندوق</button>
+          </div>
+
+          <div class="bg-white p-4 rounded-xl shadow-sm border space-y-2 text-xs">
+            <h3 class="font-extrabold text-sm text-gray-800 border-b pb-2">آخر حركات الصندوق (رقم الحركة يُستخدم في الإلغاء)</h3>
+            <div class="max-h-96 overflow-y-auto space-y-2">
+              ${state.cashTransactions.map(t => `
+                <div class="p-2.5 border rounded-lg flex justify-between items-center ${t.status === 'CANCELLED' ? 'opacity-40 line-through bg-red-50' : 'bg-gray-50'}">
+                  <div>
+                    <div class="font-bold">#${t.id} - ${t.category} (${t.payMethod})</div>
+                    <div class="text-[11px] text-gray-500">${t.date} | ${t.notes}</div>
+                  </div>
+                  <div class="font-extrabold text-sm ${t.type === 'IN' ? 'text-emerald-700' : 'text-red-600'}">
+                    ${t.type === 'IN' ? '+' : '-'}${fmt(t.amount)}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function saveSafeTransaction() {
+      const type = document.querySelector('input[name="safeOpType"]:checked').value;
+      const payMethod = document.querySelector('input[name="safePayMethod"]:checked').value;
+      const amount = R2(document.getElementById('safeAmountInput').value || 0);
+      const date = document.getElementById('safeDateInput').value || todayStr();
+      const notes = document.getElementById('safeNotesInput').value || 'حركة صندوق يدوية';
+      if (amount <= 0) { alert('أدخل مبلغاً صحيحاً!'); return; }
+
+      state.cashTransactions.unshift({
+        id: Math.floor(500 + Math.random() * 9000),
+        date,
+        type,
+        payMethod,
+        amount,
+        category: type === 'IN' ? 'إيداع بالصندوق' : 'سحب من الصندوق',
+        partyName: 'الصندوق',
+        notes,
+        repId: null,
+        status: 'ACTIVE'
+      });
+      saveState();
+      renderSafeScreen(document.getElementById('mainContainer'));
+    }
+
+    function renderExpensesScreen(container) {
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm border space-y-3 text-xs">
+            <h3 class="font-extrabold text-base text-rose-800 border-b pb-2"><i class="fa-solid fa-money-bill-wave"></i> تسجيل المصروفات (نقدا / بطاقة / شيك)</h3>
+            <div>
+              <label class="font-bold block mb-1">الحساب:</label>
+              <input id="expAccountInput" type="text" value="مصروفات تشغيل وانتقالات" placeholder="ابحث أو اكتب اسم الحساب" class="w-full border rounded-lg p-2 font-bold" />
+            </div>
+            <div>
+              <label class="font-bold block mb-1">البيان:</label>
+              <input id="expStatementInput" type="text" placeholder="ابحث أو اكتب البيان (مثال: بنزين سيارة، إيجار، كهرباء)" class="w-full border rounded-lg p-2" />
+            </div>
+            <div>
+              <label class="font-bold block mb-1">أدخل المبلغ:</label>
+              <input id="expAmountInput" type="number" step="0.01" placeholder="0.00" class="w-full border rounded-lg p-2.5 text-center font-extrabold text-base" />
+            </div>
+            <div>
+              <label class="font-bold block mb-1">طريقة الدفع:</label>
+              <div class="flex gap-2 font-bold">
+                ${['نقدا', 'بطاقة', 'شيك'].map((m, i) => `
+                  <label class="flex-1 border p-2 rounded text-center cursor-pointer">
+                    <input type="radio" name="expPayMethod" value="${m}" ${i === 0 ? 'checked' : ''} /> ${m}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <input id="expDateInput" type="date" value="${todayStr()}" class="w-full border rounded-lg p-2" />
+            <button onclick="saveExpenseRecord()" class="w-full bg-rose-700 text-white font-bold py-2.5 rounded-xl text-sm">حفظ المصروف</button>
+          </div>
+
+          <div class="bg-white p-4 rounded-xl shadow-sm border space-y-2 text-xs">
+            <h3 class="font-extrabold text-sm text-gray-800 border-b pb-2">سجل المصروفات المسجلة</h3>
+            <div class="max-h-96 overflow-y-auto space-y-2">
+              ${state.expenses.map(e => `
+                <div class="p-2.5 border rounded-lg flex justify-between items-center ${e.status === 'CANCELLED' ? 'opacity-40 line-through bg-red-50' : 'bg-gray-50'}">
+                  <div>
+                    <div class="font-bold">#${e.id} - ${e.account} (${e.payMethod})</div>
+                    <div class="text-[11px] text-gray-500">${e.date} | ${e.statement}</div>
+                  </div>
+                  <div class="font-extrabold text-rose-700 text-sm">${fmt(e.amount)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function saveExpenseRecord() {
+      const account = document.getElementById('expAccountInput').value.trim() || 'مصروفات عامة';
+      const statement = document.getElementById('expStatementInput').value.trim() || 'مصروف يومي';
+      const amount = R2(document.getElementById('expAmountInput').value || 0);
+      const payMethod = document.querySelector('input[name="expPayMethod"]:checked').value;
+      const date = document.getElementById('expDateInput').value || todayStr();
+      if (amount <= 0) { alert('أدخل مبلغ المصروف!'); return; }
+
+      state.expenses.unshift({
+        id: Math.floor(700 + Math.random() * 9000),
+        date,
+        account,
+        statement,
+        amount,
+        payMethod,
+        repId: getCurrentRep()?.id || null,
+        status: 'ACTIVE'
+      });
+      saveState();
+      renderExpensesScreen(document.getElementById('mainContainer'));
+    }
+
+    // ============================================================================
+    // 9. شاشة المخزون (مطابقة للصورة 36)
+    // ============================================================================
+    function renderInventoryScreen(container) {
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-bold">
+            <button onclick="openAddProductModal()" class="bg-orange-600 text-white p-3 rounded-xl shadow">+ إضافة منتج جديد</button>
+            <button onclick="openAddCategoryModal()" class="bg-white border p-3 rounded-xl">+ إضافة تصنيف جديد</button>
+            <button onclick="openBulkPriceModal()" class="bg-white border p-3 rounded-xl">تعديل أسعار المنتجات</button>
+            <button onclick="exportInventoryCsv()" class="bg-emerald-700 text-white p-3 rounded-xl">تصدير / استيراد إكسل (CSV)</button>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <table class="w-full text-right text-xs">
+              <thead class="bg-gray-200 font-bold">
+                <tr>
+                  <th class="p-2.5">الباركود</th>
+                  <th class="p-2.5">اسم الدواء / الصنف</th>
+                  <th class="p-2.5">التصنيف</th>
+                  <th class="p-2.5">سعر التكلفة</th>
+                  <th class="p-2.5">سعر البيع</th>
+                  <th class="p-2.5">رصيد الرئيسي</th>
+                  <th class="p-2.5">رصيد المناديب</th>
+                  <th class="p-2.5">الصلاحية</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                ${state.products.map(p => {
+                  const mainQty = getAvailableStock(p, 1);
+                  const repsQty = Object.entries(p.stockByWarehouse || {}).filter(([k]) => Number(k) !== 1).reduce((s, [, v]) => s + Number(v), 0);
+                  return `
+                    <tr class="hover:bg-gray-50">
+                      <td class="p-2.5 font-mono">${p.barcode}</td>
+                      <td class="p-2.5 font-extrabold">${p.name}<div class="text-[10px] text-gray-500">${p.scientificName}</div></td>
+                      <td class="p-2.5">${p.category}</td>
+                      <td class="p-2.5 font-bold text-gray-600">${fmt(p.costPrice)}</td>
+                      <td class="p-2.5 font-extrabold text-emerald-700">${fmt(p.sellPrice)}</td>
+                      <td class="p-2.5 font-bold">${mainQty} ${p.unit}</td>
+                      <td class="p-2.5 font-bold text-purple-700">${repsQty} ${p.unit}</td>
+                      <td class="p-2.5">${p.expiryDate}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function openAddProductModal() {
+      openModal(`
+        <div class="space-y-2.5 text-xs">
+          <h3 class="font-extrabold text-sm text-orange-700 border-b pb-2">+ إضافة منتج بيطري جديد</h3>
+          <input id="npBarcode" type="text" placeholder="الباركود (مثال: 6221009)" class="w-full border rounded p-2" />
+          <input id="npName" type="text" placeholder="الاسم التجاري للدواء *" class="w-full border rounded p-2 font-bold" />
+          <input id="npSci" type="text" placeholder="المادة الفعالة / الاسم العلمي" class="w-full border rounded p-2" />
+          <select id="npCat" class="w-full border rounded p-2 font-bold">
+            ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="npCost" type="number" step="0.01" placeholder="سعر التكلفة *" class="border rounded p-2 font-bold" />
+            <input id="npSell" type="number" step="0.01" placeholder="سعر البيع *" class="border rounded p-2 font-bold" />
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="npQty" type="number" placeholder="الرصيد الافتتاحي بالمخزن الرئيسي" class="border rounded p-2" />
+            <input id="npExp" type="date" value="2027-12-31" class="border rounded p-2" />
+          </div>
+          <button onclick="saveNewProduct()" class="w-full bg-orange-600 text-white font-bold py-2.5 rounded-xl">حفظ المنتج</button>
+        </div>
+      `);
+    }
+
+    function saveNewProduct() {
+      const name = document.getElementById('npName').value.trim();
+      if (!name) return;
+      const id = Math.max(...state.products.map(p => p.id), 100) + 1;
+      const qty = parseInt(document.getElementById('npQty').value) || 0;
+      state.products.push({
+        id,
+        barcode: document.getElementById('npBarcode').value || String(6221000 + id),
+        name,
+        scientificName: document.getElementById('npSci').value || name,
+        category: document.getElementById('npCat').value,
+        unit: 'عبوة',
+        costPrice: R2(document.getElementById('npCost').value || 0),
+        sellPrice: R2(document.getElementById('npSell').value || 0),
+        wholesalePrice: R2(document.getElementById('npSell').value || 0),
+        minStock: 10,
+        expiryDate: document.getElementById('npExp').value || '2027-12-31',
+        stockByWarehouse: { 1: qty }
+      });
+      saveState();
+      closeModal();
+      renderInventoryScreen(document.getElementById('mainContainer'));
+    }
+
+    function openAddCategoryModal() {
+      const cat = prompt('اكتب اسم التصنيف الجديد:');
+      if (cat && cat.trim()) {
+        state.categories.push(cat.trim());
+        saveState();
+        alert('تمت إضافة التصنيف بنجاح!');
+      }
+    }
+
+    function openBulkPriceModal() {
+      const pct = parseFloat(prompt('أدخل نسبة زيادة أو تخفيض أسعار البيع لجميع الأصناف (مثال: 5 لزيادة 5%):', '5'));
+      if (isNaN(pct) || pct === 0) return;
+      state.products.forEach(p => {
+        p.sellPrice = R2(p.sellPrice * (1 + pct / 100));
+      });
+      saveState();
+      renderInventoryScreen(document.getElementById('mainContainer'));
+    }
+
+    function exportInventoryCsv() {
+      let csv = 'Barcode,Name,Category,CostPrice,SellPrice,MainStock,ExpiryDate\n';
+      state.products.forEach(p => {
+        csv += `"${p.barcode}","${p.name}","${p.category}",${p.costPrice},${p.sellPrice},${getAvailableStock(p, 1)},"${p.expiryDate}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TERA_POS_Inventory_${todayStr()}.csv`;
+      a.click();
+    }
+
+    // ============================================================================
+    // 10. موسوعة الاستعلامات والتقارير الكاملة (مطابقة للصور 8 إلى 35)
+    // ============================================================================
+    function renderInquiriesScreen(container) {
+      container.innerHTML = `
+        <div class="space-y-4">
+          <!-- شريط تحديد الفترة الزمنية الموحد للاستعلامات -->
+          <div class="bg-white p-3 rounded-xl shadow-sm border flex flex-wrap justify-between items-center gap-2 text-xs">
+            <div class="font-extrabold text-sm text-teal-900"><i class="fa-solid fa-chart-line"></i> الاستعلامات والتقارير الشاملة</div>
+            <div class="flex items-center gap-2">
+              <span>للفترة من:</span>
+              <input id="repStartDate" type="date" value="2026-10-01" class="border rounded p-1.5 font-bold" />
+              <span>إلى:</span>
+              <input id="repEndDate" type="date" value="${todayStr()}" class="border rounded p-1.5 font-bold" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <!-- 1. المتجر وحركة المتجر -->
+            <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <div class="bg-teal-800 text-white font-bold p-2.5">المتجر وحركة المتجر</div>
+              <div class="divide-y">
+                <button onclick="openStoreMovementReport()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between items-center font-bold"><span>عرض حركة المتجر (تفصيلي شامل)</span><i class="fa-solid fa-chevron-left text-gray-400"></i></button>
+                <button onclick="openStoreChartModal()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between items-center font-bold text-blue-700"><span>عرض حركة المتجر - رسم بياني</span><i class="fa-solid fa-chart-column"></i></button>
+              </div>
+            </div>
+
+            <!-- 2. تقارير رأس المال والزكاة والإقرار الضريبي -->
+            <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <div class="bg-emerald-800 text-white font-bold p-2.5">رأس المال والزكاة والإقرار الضريبي (MPOSPDF)</div>
+              <div class="divide-y">
+                <button onclick="generateCapitalReportPDF()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between items-center font-bold"><span>تقرير رأس المال (MPOSPDFshopt)</span><i class="fa-solid fa-file-pdf text-red-600"></i></button>
+                <button onclick="generateZakatReportPDF()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between items-center font-bold"><span>حساب الزكاة 2.5% (MPOSPDFzkaht)</span><i class="fa-solid fa-file-pdf text-emerald-700"></i></button>
+                <button onclick="generateTaxReturnPDF(false)" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between items-center font-bold"><span>تقرير بالإقرار الضريبي (MPOSPDFtaxtot)</span><i class="fa-solid fa-file-pdf text-indigo-700"></i></button>
+                <button onclick="generateTaxReturnPDF(true)" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between items-center font-bold"><span>تقرير بالإقرار الضريبي مع المرتجع (MPOSPDFtaxtotr)</span><i class="fa-solid fa-file-pdf text-purple-700"></i></button>
+              </div>
+            </div>
+
+            <!-- 3. تقارير المبيعات والأرباح والخصومات -->
+            <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <div class="bg-indigo-800 text-white font-bold p-2.5">المبيعات والأرباح والخصومات</div>
+              <div class="divide-y">
+                <button onclick="openFilteredInvoicesModal('SALE')" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between"><span>عرض فواتير المبيعات (نقد / آجل / بطاقة / شيك)</span><i class="fa-solid fa-chevron-left text-gray-400"></i></button>
+                <button onclick="openProfitAnalysisModal()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between font-bold text-emerald-800"><span>تقارير الأرباح (حسب الصنف / الفاتورة / العميل)</span><i class="fa-solid fa-sack-dollar"></i></button>
+                <button onclick="openFilteredInvoicesModal('SALE_RETURN')" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between"><span>تقرير بالفواتير المرتجع مبيعات</span><i class="fa-solid fa-chevron-left text-gray-400"></i></button>
+                <button onclick="openFilteredInvoicesModal('QUOTE')" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between"><span>تقرير بعروض الأسعار</span><i class="fa-solid fa-chevron-left text-gray-400"></i></button>
+              </div>
+            </div>
+
+            <!-- 4. تقارير العملاء والموردين والمخازن والصندوق -->
+            <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <div class="bg-amber-700 text-white font-bold p-2.5">العملاء والموردين والمخزون والصندوق</div>
+              <div class="divide-y">
+                <button onclick="printClientsDebtReport()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between font-bold"><span>ذمم العملاء وكشوف الحساب (MPOSPDF)</span><i class="fa-solid fa-users"></i></button>
+                <button onclick="openFilteredInvoicesModal('PURCHASE')" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between"><span>تقارير المشتريات والموردين</span><i class="fa-solid fa-chevron-left text-gray-400"></i></button>
+                <button onclick="generateExpensesPDF()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between"><span>تقرير بالمصروفات حسب الحساب وطريقة الدفع (MPOSPDFex1)</span><i class="fa-solid fa-file-pdf text-rose-600"></i></button>
+                <button onclick="generateStockExpiryPDF()" class="w-full p-2.5 text-right hover:bg-gray-50 flex justify-between"><span>جرد مخزني وتقرير المنتجات حسب تاريخ الانتهاء</span><i class="fa-solid fa-boxes-stacked"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // شاشة "عرض حركة المتجر" المطابقة للصور 25 و 26 و 27 و 28
+    function openStoreMovementReport() {
+      const start = document.getElementById('repStartDate')?.value || '2026-10-01';
+      const end = document.getElementById('repEndDate')?.value || todayStr();
+      const safe = computeSafeBalances(start, end);
+
+      const sales = state.invoices.filter(i => i.type === 'SALE' && i.status === 'ACTIVE' && i.date >= start && i.date <= end);
+      const saleReturns = state.invoices.filter(i => i.type === 'SALE_RETURN' && i.status === 'ACTIVE' && i.date >= start && i.date <= end);
+      const purchases = state.invoices.filter(i => i.type === 'PURCHASE' && i.status === 'ACTIVE' && i.date >= start && i.date <= end);
+      const purchaseReturns = state.invoices.filter(i => i.type === 'PURCHASE_RETURN' && i.status === 'ACTIVE' && i.date >= start && i.date <= end);
+      const exps = state.expenses.filter(e => e.status === 'ACTIVE' && e.date >= start && e.date <= end);
+
+      const sumBy = (arr, fn) => R2(arr.reduce((s, x) => s + fn(x), 0));
+
+      const totalSales = sumBy(sales, i => i.grandTotal);
+      const salesCash = sumBy(sales.filter(i => i.payMethod === 'نقدا'), i => i.paidAmount);
+      const salesCredit = sumBy(sales, i => i.remainingAmount);
+      const salesCard = sumBy(sales.filter(i => i.payMethod === 'بطاقة'), i => i.paidAmount);
+      const salesCheck = sumBy(sales.filter(i => i.payMethod === 'شيك'), i => i.paidAmount);
+      const totalSaleReturn = sumBy(saleReturns, i => i.grandTotal);
+      const totalDiscounts = sumBy(sales, i => i.discount);
+      const totalTaxes = sumBy(sales, i => i.taxAmount);
+
+      const grossProfit = sumBy(sales, i => R2(i.grandTotal - i.taxAmount - i.totalCost)) - sumBy(saleReturns, i => R2(i.grandTotal - i.totalCost));
+      const totalExpenses = sumBy(exps, e => e.amount);
+      const netProfitAfterExp = R2(grossProfit - totalExpenses);
+
+      const totalPurchases = sumBy(purchases, i => i.grandTotal);
+      const purchCash = sumBy(purchases.filter(i => i.payMethod === 'نقدا'), i => i.paidAmount);
+      const purchCredit = sumBy(purchases, i => i.remainingAmount);
+      const totalPurchReturn = sumBy(purchaseReturns, i => i.grandTotal);
+
+      const rowHtml = (label, val, highlight = false) => `
+        <div class="flex justify-between items-center py-2 px-3 border-b ${highlight ? 'bg-emerald-50 font-extrabold text-emerald-900' : ''}">
+          <span>${label}</span>
+          <span class="font-bold">${fmt(val)}</span>
+        </div>
+      `;
+
+      openModal(`
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-extrabold text-base text-teal-900">عرض حركة المتجر (${start} إلى ${end})</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <div class="border rounded-xl overflow-hidden divide-y">
+            ${rowHtml('الرصيد في الصندوق', safe.totalSafe, true)}
+            ${rowHtml('الرصيد في الصندوق خلال الفترة', safe.periodNet)}
+            <div class="bg-gray-200 font-extrabold p-2 text-center">المبيعات والأرباح</div>
+            ${rowHtml('إجمالي المبيعات', totalSales, true)}
+            ${rowHtml('إجمالي المبيعات نقداً', salesCash)}
+            ${rowHtml('إجمالي المبيعات آجل', salesCredit)}
+            ${rowHtml('إجمالي المبيعات (بطاقة)', salesCard)}
+            ${rowHtml('إجمالي المبيعات (شيك)', salesCheck)}
+            ${rowHtml('إجمالي المرتجع مبيعات', totalSaleReturn)}
+            ${rowHtml('إجمالي الخصومات', totalDiscounts)}
+            ${rowHtml('إجمالي الضرائب', totalTaxes)}
+            ${rowHtml('إجمالي المتبقي عند العملاء', state.clients.reduce((s, c) => R2(s + c.balance), 0))}
+            ${rowHtml('إجمالي الأرباح', grossProfit, true)}
+            ${rowHtml('إجمالي الأرباح بعد خصم المصروفات', netProfitAfterExp, true)}
+            <div class="bg-gray-200 font-extrabold p-2 text-center">المشتريات والمصروفات</div>
+            ${rowHtml('إجمالي المشتريات', totalPurchases, true)}
+            ${rowHtml('إجمالي المشتريات نقداً', purchCash)}
+            ${rowHtml('إجمالي المشتريات آجل', purchCredit)}
+            ${rowHtml('إجمالي مرتجع المشتريات', totalPurchReturn)}
+            ${rowHtml('إجمالي المتبقي للموردين', state.suppliers.reduce((s, x) => R2(s + x.balance), 0))}
+            ${rowHtml('إجمالي المصروفات', totalExpenses, true)}
+          </div>
+        </div>
+      `);
+    }
+
+    // الرسم البياني لحركة المتجر (مطابق للصورة 23)
+    function openStoreChartModal() {
+      const safe = computeSafeBalances();
+      const sales = state.invoices.filter(i => i.type === 'SALE' && i.status === 'ACTIVE').reduce((s, i) => R2(s + i.grandTotal), 0);
+      const purchases = state.invoices.filter(i => i.type === 'PURCHASE' && i.status === 'ACTIVE').reduce((s, i) => R2(s + i.grandTotal), 0);
+      const sRet = state.invoices.filter(i => i.type === 'SALE_RETURN' && i.status === 'ACTIVE').reduce((s, i) => R2(s + i.grandTotal), 0);
+      const pRet = state.invoices.filter(i => i.type === 'PURCHASE_RETURN' && i.status === 'ACTIVE').reduce((s, i) => R2(s + i.grandTotal), 0);
+      const exp = state.expenses.filter(e => e.status === 'ACTIVE').reduce((s, e) => R2(s + e.amount), 0);
+      const profit = state.invoices.filter(i => i.type === 'SALE' && i.status === 'ACTIVE').reduce((s, i) => R2(s + (i.grandTotal - i.totalCost)), 0) - exp;
+
+      const items = [
+        { label: 'الصندوق', val: safe.totalSafe, color: 'bg-cyan-500' },
+        { label: 'المبيعات', val: sales, color: 'bg-emerald-600' },
+        { label: 'المشتريات', val: purchases, color: 'bg-blue-600' },
+        { label: 'م. مبيعات', val: sRet, color: 'bg-amber-500' },
+        { label: 'م. مشتريات', val: pRet, color: 'bg-purple-500' },
+        { label: 'المصروفات', val: exp, color: 'bg-rose-600' },
+        { label: 'الأرباح', val: profit, color: 'bg-teal-700' }
+      ];
+      const maxVal = Math.max(...items.map(i => Math.abs(i.val)), 100);
+
+      openModal(`
+        <div class="space-y-4 text-xs">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-extrabold text-sm">حركة المتجر - رسم بياني (${todayStr()})</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <div class="h-64 border rounded-xl p-4 flex items-end justify-around gap-2 bg-gray-50">
+            ${items.map(it => {
+              const hPct = Math.min(100, Math.max(8, Math.round((Math.abs(it.val) / maxVal) * 100)));
+              return `
+                <div class="flex flex-col items-center flex-1 h-full justify-end">
+                  <span class="text-[10px] font-bold mb-1">${fmt(it.val)}</span>
+                  <div class="w-full max-w-[38px] ${it.color} rounded-t-lg transition-all" style="height: ${hPct}%"></div>
+                  <span class="text-[11px] font-bold mt-2 text-gray-700">${it.label}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `);
+    }
+
+    // شاشة البحث والفلترة بالعلامات الوردية (نقد / آجل / بطاقة / شيك) كما في الصورة 18 و 20
+    function openFilteredInvoicesModal(invType) {
+      openModal(`
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-extrabold text-sm">استعلام الفواتير (${invType})</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <input id="fltInvQuery" type="text" placeholder="رقم الفاتورة أو اسم العميل / المورد" class="w-full border rounded p-2" />
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-gray-50 p-2 rounded border">
+            <label class="flex items-center gap-1 font-bold"><input type="checkbox" id="chkCash" class="pink-check" checked /> النقد</label>
+            <label class="flex items-center gap-1 font-bold"><input type="checkbox" id="chkCredit" class="pink-check" checked /> الآجل</label>
+            <label class="flex items-center gap-1 font-bold"><input type="checkbox" id="chkCard" class="pink-check" checked /> بطاقة</label>
+            <label class="flex items-center gap-1 font-bold"><input type="checkbox" id="chkCheck" class="pink-check" checked /> شيك</label>
+            <button onclick="runInvoiceFilter('${invType}')" class="bg-gray-800 text-white px-4 py-1.5 rounded font-bold">بحث</button>
+          </div>
+          <div id="filteredInvoicesResult" class="max-h-72 overflow-y-auto divide-y border rounded"></div>
+        </div>
+      `);
+      runInvoiceFilter(invType);
+    }
+
+    function runInvoiceFilter(invType) {
+      const q = (document.getElementById('fltInvQuery')?.value || '').trim();
+      const allowCash = document.getElementById('chkCash')?.checked;
+      const allowCredit = document.getElementById('chkCredit')?.checked;
+      const allowCard = document.getElementById('chkCard')?.checked;
+      const allowCheck = document.getElementById('chkCheck')?.checked;
+
+      const list = state.invoices.filter(i => {
+        if (i.type !== invType) return false;
+        if (q && !i.number.includes(q) && !i.partyName.includes(q)) return false;
+        if (invType === 'QUOTE') return true;
+        if (i.payMethod === 'نقدا' && !allowCash) return false;
+        if (i.payMethod === 'آجل' && !allowCredit) return false;
+        if (i.payMethod === 'بطاقة' && !allowCard) return false;
+        if (i.payMethod === 'شيك' && !allowCheck) return false;
+        return true;
+      });
+
+      const box = document.getElementById('filteredInvoicesResult');
+      if (list.length === 0) {
+        box.innerHTML = `<div class="p-4 text-center text-gray-400">لا توجد فواتير مطابقة</div>`;
+        return;
+      }
+      box.innerHTML = list.map(i => `
+        <div class="p-2.5 flex justify-between items-center ${i.status === 'CANCELLED' ? 'bg-red-50 line-through' : ''}">
+          <div>
+            <div class="font-bold">${i.number} - ${i.partyName} (${i.payMethod})</div>
+            <div class="text-[10px] text-gray-500">التاريخ: ${i.date} | المدفوع: ${fmt(i.paidAmount)} \vert{} الباقي: ${fmt(i.remainingAmount)}</div>
+          </div>
+          <div class="font-extrabold text-emerald-800">${fmt(i.grandTotal)}</div>
+        </div>
+      `).join('');
+    }
+
+    function openProfitAnalysisModal() {
+      const sales = state.invoices.filter(i => i.type === 'SALE' && i.status === 'ACTIVE');
+      openModal(`
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-extrabold text-sm text-emerald-800">تقرير بالمبيعات والأرباح حسب رقم الفاتورة والعميل</h3>
+            <button onclick="closeModal()">✕</button>
+          </div>
+          <div class="max-h-80 overflow-y-auto border rounded">
+            <table class="w-full text-right">
+              <thead class="bg-gray-100 font-bold">
+                <tr><th class="p-2">الفاتورة</th><th class="p-2">العميل</th><th class="p-2">صافي البيع</th><th class="p-2">التكلفة شاملة البونص</th><th class="p-2">صافي الربح</th></tr>
+              </thead>
+              <tbody class="divide-y">
+                ${sales.map(i => {
+                  const netRev = R2(i.grandTotal - i.taxAmount);
+                  const prof = R2(netRev - i.totalCost);
+                  return `
+                    <tr>
+                      <td class="p-2 font-bold">${i.number}</td>
+                      <td class="p-2">${i.partyName}</td>
+                      <td class="p-2">${fmt(netRev)}</td>
+                      <td class="p-2 text-gray-600">${fmt(i.totalCost)}</td>
+                      <td class="p-2 font-extrabold ${prof >= 0 ? 'text-emerald-700' : 'text-red-600'}">${fmt(prof)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `);
+    }
+
+    // ============================================================================
+    // 11. مولد تقارير PDF الرسمية المطابقة لـ MPOSPDF (الصور 3، 9، 10، 11، 12، 13، 14)
+    // ============================================================================
+    function renderPrintableReport(title, fileCode, tableHtml) {
+      const printArea = document.getElementById('printArea');
+      printArea.innerHTML = `
+        <div class="border-2 border-gray-800 p-4 text-xs space-y-3 bg-white">
+          <div class="flex justify-between items-start border-b-2 border-gray-800 pb-3">
+            <div>
+              <div class="font-bold">Date: ${todayStr()}</div>
+              <div class="text-gray-600">Code: ${fileCode}</div>
+            </div>
+            <div class="text-center">
+              <h2 class="font-extrabold text-lg">${title}</h2>
+              <div class="text-gray-600">للفترة من ${todayStr()} إلى ${todayStr()}</div>
+            </div>
+            <div class="text-left">
+              <div class="font-extrabold text-sm">${state.settings.storeName}</div>
+              <div>${state.settings.address}</div>
+              <div>${state.settings.phone}</div>
+            </div>
+          </div>
+          ${tableHtml}
+        </div>
+      `;
+
+      openModal(`
+        <div class="space-y-3">
+          <div class="flex justify-between items-center border-b pb-2">
+            <span class="font-extrabold text-sm text-gray-800">${fileCode}.pdf</span>
+            <div class="flex gap-2">
+              <button onclick="window.print()" class="bg-emerald-700 text-white px-3 py-1 rounded text-xs font-bold"><i class="fa-solid fa-print"></i> طباعة / Save PDF</button>
+              <button onclick="closeModal()" class="text-gray-500 px-2">✕</button>
+            </div>
+          </div>
+          ${printArea.innerHTML}
+        </div>
+      `);
+    }
+
+    // 1. كشف حساب عميل أو مورد تفصيلي (مطابق تماماً للصورة 3: MPOSPDFexprpt9)
+    function generatePartyStatementPDF(partyType, partyId) {
+      const isClient = partyType === 'CLIENT';
+      const party = (isClient ? state.clients : state.suppliers).find(p => p.id === partyId);
+      if (!party) return;
+
+      const rows = [];
+      let running = R2(party.openingBalance || 0);
+      let totalDebit = running > 0 ? running : 0;
+      let totalCredit = running < 0 ? Math.abs(running) : 0;
+
+      if (running !== 0) {
+        rows.push({ idx: 1, date: '2026-10-01', credit: running < 0 ? Math.abs(running) : 0, debit: running > 0 ? running : 0, bal: running, desc: 'رصيد سابق / افتتاحي' });
+      }
+
+      const partyInvoices = state.invoices.filter(i => i.partyId === party.id && i.status === 'ACTIVE');
+      partyInvoices.forEach(inv => {
+        if (isClient && inv.type === 'SALE') {
+          running = R2(running + inv.remainingAmount);
+          totalDebit = R2(totalDebit + inv.grandTotal);
+          totalCredit = R2(totalCredit + inv.paidAmount);
+          rows.push({ idx: rows.length + 1, date: inv.date, credit: inv.paidAmount, debit: inv.grandTotal, bal: running, desc: `فاتورة مبيعات ${inv.number}` });
+        } else if (!isClient && inv.type === 'PURCHASE') {
+          running = R2(running + inv.remainingAmount);
+          totalCredit = R2(totalCredit + inv.grandTotal);
+          totalDebit = R2(totalDebit + inv.paidAmount);
+          rows.push({ idx: rows.length + 1, date: inv.date, credit: inv.grandTotal, debit: inv.paidAmount, bal: running, desc: `فاتورة مشتريات ${inv.number}` });
+        }
+      });
+
+      const html = `
+        <div class="font-bold mb-2">اسم ${isClient ? 'العميل' : 'المورد'} : ${party.name}</div>
+        <table class="w-full text-center border-collapse border border-gray-800 text-xs">
+          <thead class="bg
